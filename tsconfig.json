@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ES2015", "DOM"],
+    "moduleResolution": "node",
+    "module": "ESNext",
+    "strict": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "baseUrl": "src"
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+}
