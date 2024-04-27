@@ -18,6 +18,11 @@ export interface TableSelectOptions {
    */
   selectedSelector?: string;
   /**
+   * The prefix for selected cells' 'lasso' class.
+   * e.g.: 'lasso' will generate 'lasso-left', lasso-top-right', etc.
+   */
+  lassoSelectorPrefix?: string;
+  /**
    * Clear selection when container element is unfocused.
    */
   clearOnBlur?: boolean;
