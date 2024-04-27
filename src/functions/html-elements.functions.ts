@@ -38,10 +38,14 @@ export const getFirstElementByClassName =
     return;
   };
 
-export const addClass = (selector: string) => (element: HTMLElement) => {
-  element.classList.add(selector);
-};
+export const addClass =
+  (...args: string[]) =>
+  (element: HTMLElement) => {
+    element.classList.add(...args);
+  };
 
-export const removeClass = (selector: string) => (element: HTMLElement) => {
-  element.classList.remove(selector);
-};
+export const removeClass =
+  (...args: string[]) =>
+  (element: HTMLElement) => {
+    element.classList.remove(...args);
+  };
