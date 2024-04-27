@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import {
+  ref,
+  onMounted,
+  onBeforeUnmount,
+  watch,
+  nextTick,
+  onUpdated,
+} from 'vue';
 import type { Ref } from 'vue';
 import { useTableSelect } from '../../src/useTableSelect';
 import { getFirstElementByClassName } from '../../src/functions';
@@ -7,27 +14,43 @@ import { getFirstElementByClassName } from '../../src/functions';
 
 const data: Ref<Array<Array<any>>> = ref([]);
 const tableRef: Ref<HTMLElement | undefined> = ref();
+const horizontalGuideRef: Ref<HTMLElement | undefined> = ref();
 
 let styleElement: HTMLStyleElement;
 
-const { selection, activeCell, selectionBounds, resetSelection } =
-  useTableSelect(tableRef, data, {
-    rowSelector: 'row',
-    colSelector: 'col',
-    selectedSelector: 'selected',
-    resetOnChange: false,
-    clearOnBlur: false,
-  });
+const {
+  selection,
+  activeCell,
+  selectionBounds,
+  selectedRows,
+  selectedCols,
+  resetSelection,
+} = useTableSelect(tableRef, data, {
+  rowSelector: 'row',
+  colSelector: 'col',
+  selectedSelector: 'selected',
+  resetOnChange: false,
+  clearOnBlur: false,
+});
 
 watch(
-  () => [selection.value, activeCell.value, selectionBounds.value],
+  () => [
+    selection.value,
+    activeCell.value,
+    selectionBounds.value,
+    selectedRows.value,
+    selectedCols.value,
+  ],
   () => {
+    // console.log(selection.value.size);
     /*
     console.log(
       'SE',
       Array.from(selection.value),
       activeCell.value,
-      selectionBounds.value
+      selectionBounds.value,
+      selectedRows.value,
+      selectedCols.value
     );
     */
   },
@@ -35,9 +58,9 @@ watch(
 );
 
 onMounted(() => {
-  for (let row = 0; row < 100; row++) {
+  for (let row = 0; row < 20; row++) {
     const cols = [];
-    for (let col = 0; col < 100; col++) {
+    for (let col = 0; col < 20; col++) {
       cols[col] = ''; // `${row} ${col}`;
     }
     data.value.push(cols);
@@ -45,11 +68,8 @@ onMounted(() => {
 
   mountStyle();
 
-  const horizontalGuide = getFirstElementByClassName('mbz-horizontal-guide')(
-    tableRef.value!
-  ) as HTMLElement;
-  if (horizontalGuide) {
-    horizontalGuide.style.display = 'none';
+  if (horizontalGuideRef.value) {
+    horizontalGuideRef.value.style.display = 'none';
   }
 });
 
@@ -79,48 +99,12 @@ function setCSSStyle(selector: string, prop: string, value: string) {
   sheet.insertRule(`${selector} { ${prop}: ${value}; }`, sheet.cssRules.length);
 }
 
-let currentSize: number = 0;
-const onResizeRowStart = (event: DragEvent, index: number) => {
-  // Get parent (row) of the draggable element.
-  const parent = (event.target as HTMLElement).parentElement;
-  currentSize = parent!.offsetHeight;
-
-  const horizontalGuide = getFirstElementByClassName('mbz-horizontal-guide')(
-    tableRef.value!
-  ) as HTMLElement;
-
-  if (horizontalGuide) {
-    horizontalGuide.style.display = '';
-  }
-};
-
 const onResizeRow = (event: DragEvent, index: number) => {
-  console.log(event);
+  // console.log(event);
   // To avoid the jump on release
   // https://stackoverflow.com/a/47241403/1060921
   if (!event.screenX && !event.screenY) return;
 
-  // Get parent (row) of the draggable element.
-  const parent = (event.target as HTMLElement).parentElement;
-  currentSize = parent!.offsetHeight + event.offsetY;
-
-  nextTick(() => {
-    const horizontalGuide = getFirstElementByClassName('mbz-horizontal-guide')(
-      tableRef.value!
-    ) as HTMLElement;
-
-    if (horizontalGuide) {
-      horizontalGuide.style.top = `${
-        tableRef.value!.clientTop +
-        parent!.offsetTop +
-        currentSize -
-        parent!.offsetHeight
-      }px`;
-    }
-  });
-};
-
-const onResizeRowEnd = (event: DragEvent, index: number) => {
   // Get parent (row) of the draggable element.
   const parent = (event.target as HTMLElement).parentElement;
 
@@ -129,15 +113,6 @@ const onResizeRowEnd = (event: DragEvent, index: number) => {
     'min-height',
     `${parent!.offsetHeight + event.offsetY}px`
   );
-
-  const horizontalGuide = getFirstElementByClassName('mbz-horizontal-guide')(
-    tableRef.value!
-  ) as HTMLElement;
-  if (horizontalGuide) {
-    horizontalGuide.style.display = 'none';
-  }
-
-  currentSize = 0;
 };
 
 const onResizeCol = (event: DragEvent, index: number) => {
@@ -226,16 +201,14 @@ const getStyle = (el: HTMLElement, styleProp: string) => {
         .mbz-select-all 
         .mbz-row-header(
             v-for="index in data.length",
-            :class="`row-${index - 1}`"
-            :key="`row-${index - 1}`"
+            :class="`row-${index - 1}`, {'selected': selectedRows.includes(index - 1)}"
+            :key="`row-${index - 1}`",
         ) 
           .index {{ index }}
           .resize-handle(
             draggable="true",
 
-            @dragstart="onResizeRowStart($event, index - 1)",
             @drag="onResizeRow($event, index - 1)",
-            @dragend="onResizeRowEnd($event, index - 1)"
           )
 
 
@@ -244,7 +217,7 @@ const getStyle = (el: HTMLElement, styleProp: string) => {
             .mbz-col-header(
                 v-if="data.length > 0",
                 v-for="index in (data[0].length)",
-                :class="`col-${index-1}`"
+                :class="`col-${index-1}`, {'selected': selectedCols.includes(index - 1)}"
             ) 
                 .index {{ numberToColumn(index - 1) }}
                 .resize-handle(
@@ -254,7 +227,6 @@ const getStyle = (el: HTMLElement, styleProp: string) => {
         .mbz-table(
             ref="tableRef"
         )
-            .mbz-horizontal-guide
             .row(
                 v-for="(row, rowIndex) in data",
                 :key="rowIndex",
@@ -269,7 +241,7 @@ const getStyle = (el: HTMLElement, styleProp: string) => {
                     :class="`col-${colIndex}`"
 
                     @dblclick="onDoubleClick",
-                ) 
+                )
                     .mbz-cell-value {{ col }}
                     // TODO: add textarea when necessary
 </template>
@@ -329,6 +301,9 @@ const getStyle = (el: HTMLElement, styleProp: string) => {
             position: relative
             user-select: none
 
+            &.selected
+              background: grey
+
             &:last-child
                 border-bottom: 0
 
@@ -361,6 +336,9 @@ const getStyle = (el: HTMLElement, styleProp: string) => {
             font-weight: bolder
             position: relative
             user-select: none
+
+            &.selected
+              background: grey
 
             &:last-child
                 border-right: 0
@@ -409,20 +387,64 @@ const getStyle = (el: HTMLElement, styleProp: string) => {
                 padding: 0
                 margin: 0
 
+                &.lasso
+                  z-index: 1
+
+                &.lasso-top-left
+                    border-top: 2px solid black
+                    border-left: 2px solid black
+                    border-top-left-radius: 3px
+
+                &.lasso-top
+                    border-top: 2px solid black
+
+                &.lasso-top-right
+                    border-top: 2px solid black
+                    border-right: 2px solid black
+                    border-top-right-radius: 3px
+
+                &.lasso-right
+                    border-right: 2px solid black
+
+                &.lasso-bottom-right
+                    border-bottom: 2px solid black
+                    border-right: 2px solid black
+                    border-bottom-right-radius: 3px
+
+                &.lasso-bottom
+                    border-bottom: 2px solid black
+
+                &.lasso-bottom-left
+                    border-bottom: 2px solid black
+                    border-left: 2px solid black
+                    border-bottom-left-radius: 3px
+
+                &.lasso-left
+                    border-left: 2px solid black
+
                 &:first-child
                     border-left: 1px solid grey
 
                 &:not(.active)
-                    border-right: 1px solid grey
-                    &.selected
-                        background: lightgrey
+                &:not(.lasso-right)
+                  &:not(.lasso-top-right)
+                    &:not(.lasso-bottom-right)
+                      border-right: 1px solid grey
 
-                &.active
+                &:not(.active)
+                  &.selected
+                      background: lightgrey
+
+                &.fmolqsjkfmlsm // active
                     border: 1px solid black
                     outline: 2px solid black
                     border-radius: 3px
                     background: #eee
                     z-index: 1
+
+                &.active
+                  background: #eee
+
 
                 textarea
                     display: block
