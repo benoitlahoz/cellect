@@ -3,7 +3,7 @@ import {
   TableSelectOptions,
 } from '../types/table-select.abstract';
 import { Cell } from './cell.module';
-import { cellsFromSelectors } from '../functions';
+import { addClass, cellsFromSelectors, removeClass } from '../functions';
 import { CellBounds } from 'types/cell.abstract';
 
 const DEFAULT_OPTIONS: TableSelectOptions = {
@@ -11,6 +11,7 @@ const DEFAULT_OPTIONS: TableSelectOptions = {
   colSelector: 'col',
   activeSelector: 'active',
   selectedSelector: 'selected',
+  lassoSelectorPrefix: 'lasso',
   clearOnBlur: true,
   pointerEventChannel: 'mousedown',
   acceptsKeyboard: true,
@@ -37,6 +38,17 @@ export class TableSelect implements AbstractTableSelect {
   private _activeCell: Cell | undefined;
 
   private _selection: Set<Cell> = new Set();
+
+  private _addFullLasso: (element: HTMLElement) => void;
+  private _addLassoTopLeft: (element: HTMLElement) => void;
+  private _addLassoTop: (element: HTMLElement) => void;
+  private _addLassoTopRight: (element: HTMLElement) => void;
+  private _addLassoRight: (element: HTMLElement) => void;
+  private _addLassoBottomRight: (element: HTMLElement) => void;
+  private _addLassoBottom: (element: HTMLElement) => void;
+  private _addLassoBottomLeft: (element: HTMLElement) => void;
+  private _addLassoLeft: (element: HTMLElement) => void;
+  private _removeLasso: (element: HTMLElement) => void;
 
   private _onBoundKeydown;
   private _onBoundKeyup;
@@ -65,6 +77,63 @@ export class TableSelect implements AbstractTableSelect {
       this._element.tabIndex = -1;
     }
 
+    // Create functions to add lasso class.
+
+    this._addFullLasso = addClass(
+      this._options.lassoSelectorPrefix!,
+      `${this._options.lassoSelectorPrefix!}-top-left`,
+      `${this._options.lassoSelectorPrefix!}-top`,
+      `${this._options.lassoSelectorPrefix!}-top-right`,
+      `${this._options.lassoSelectorPrefix!}-right`,
+      `${this._options.lassoSelectorPrefix!}-bottom-right`,
+      `${this._options.lassoSelectorPrefix!}-bottom`,
+      `${this._options.lassoSelectorPrefix!}-bottom-left`,
+      `${this._options.lassoSelectorPrefix!}-left`
+    );
+    this._addLassoTopLeft = addClass(
+      this._options.lassoSelectorPrefix!,
+      `${this._options.lassoSelectorPrefix!}-top-left`
+    );
+    this._addLassoTop = addClass(
+      this._options.lassoSelectorPrefix!,
+      `${this._options.lassoSelectorPrefix!}-top`
+    );
+    this._addLassoTopRight = addClass(
+      this._options.lassoSelectorPrefix!,
+      `${this._options.lassoSelectorPrefix!}-top-right`
+    );
+    this._addLassoRight = addClass(
+      this._options.lassoSelectorPrefix!,
+      `${this._options.lassoSelectorPrefix!}-right`
+    );
+    this._addLassoBottomRight = addClass(
+      this._options.lassoSelectorPrefix!,
+      `${this._options.lassoSelectorPrefix!}-bottom-right`
+    );
+    this._addLassoBottom = addClass(
+      this._options.lassoSelectorPrefix!,
+      `${this._options.lassoSelectorPrefix!}-bottom`
+    );
+    this._addLassoBottomLeft = addClass(
+      this._options.lassoSelectorPrefix!,
+      `${this._options.lassoSelectorPrefix!}-bottom-left`
+    );
+    this._addLassoLeft = addClass(
+      this._options.lassoSelectorPrefix!,
+      `${this._options.lassoSelectorPrefix!}-left`
+    );
+    this._removeLasso = removeClass(
+      this._options.lassoSelectorPrefix!,
+      `${this._options.lassoSelectorPrefix!}-top-left`,
+      `${this._options.lassoSelectorPrefix!}-top`,
+      `${this._options.lassoSelectorPrefix!}-top-right`,
+      `${this._options.lassoSelectorPrefix!}-right`,
+      `${this._options.lassoSelectorPrefix!}-bottom-right`,
+      `${this._options.lassoSelectorPrefix!}-bottom`,
+      `${this._options.lassoSelectorPrefix!}-bottom-left`,
+      `${this._options.lassoSelectorPrefix!}-left`
+    );
+
     if (this._options.clearOnBlur) {
       this.clearOnBlur = true;
     }
@@ -86,6 +155,7 @@ export class TableSelect implements AbstractTableSelect {
 
     for (const row of this._cells) {
       for (const cell of row) {
+        this._removeLasso(cell.element);
         cell.dispose();
       }
     }
@@ -149,11 +219,37 @@ export class TableSelect implements AbstractTableSelect {
         if (cell) {
           cell.setSelected(true);
           newCells.push(cell);
+
+          if (row === firstRow) {
+            if (col === firstCol) {
+              this._addLassoTopLeft(cell.element);
+              continue;
+            } else if (col === lastCol) {
+              this._addLassoTopRight(cell.element);
+              continue;
+            }
+            this._addLassoTop(cell.element);
+          } else if (row === lastRow) {
+            if (col === firstCol) {
+              this._addLassoBottomLeft(cell.element);
+              continue;
+            } else if (col === lastCol) {
+              this._addLassoBottomRight(cell.element);
+              continue;
+            }
+            this._addLassoBottom(cell.element);
+          }
+
+          if (col === firstCol) {
+            this._addLassoLeft(cell.element);
+          } else if (col === lastCol) {
+            this._addLassoRight(cell.element);
+          }
         }
       }
     }
 
-    // Add selected cell to array.
+    // Set selection to selected cells;
     this._selection = new Set([...Array.from(this._selection), ...newCells]);
   }
 
@@ -183,8 +279,11 @@ export class TableSelect implements AbstractTableSelect {
   }
 
   private _resetSelection(): void {
+    let i = 0;
     for (const cell of this._selection) {
+      this._removeLasso(cell.element);
       cell.setSelected(false);
+      i++;
     }
     this._selection.clear();
   }
@@ -219,14 +318,14 @@ export class TableSelect implements AbstractTableSelect {
         // and all selection.
 
         this._activeCell.setActive(false);
-        this._activeCell.setSelected(false);
-        this._activeCell = undefined;
 
         this._resetSelection();
+        this._activeCell = undefined;
       }
 
       this._activeCell = cell.setActive(true);
       this._selection.add(cell.setSelected(true));
+      this._addFullLasso(cell.element);
 
       this.sendSelectEvent();
 
@@ -253,11 +352,18 @@ export class TableSelect implements AbstractTableSelect {
 
           if (this._activeCell) {
             this._activeCell.setActive(false);
+            this._removeLasso(this._activeCell.element);
             this._activeCell = undefined;
+
+            // Remove lasso from all selected cells.
+            for (const cell of this.selection) {
+              this._removeLasso(cell.element);
+            }
           }
 
           this._activeCell = cell.setActive(true);
           this._selection.add(cell.setSelected(true));
+          this._addFullLasso(cell.element);
         }
       }
     } else if (
@@ -332,6 +438,7 @@ export class TableSelect implements AbstractTableSelect {
 
             this._activeCell = cell.setActive();
             this._selection.add(cell.setSelected());
+            this._addFullLasso(cell.element);
           } else {
             // Reset all selected cells.
             this._resetSelection();
@@ -378,6 +485,7 @@ export class TableSelect implements AbstractTableSelect {
 
             this._activeCell = cell.setActive();
             this._selection.add(cell.setSelected());
+            this._addFullLasso(cell.element);
           } else {
             // Reset all selected cells.
             this._resetSelection();
@@ -426,6 +534,7 @@ export class TableSelect implements AbstractTableSelect {
 
             this._activeCell = cell.setActive();
             this._selection.add(cell.setSelected());
+            this._addFullLasso(cell.element);
           } else {
             // Reset all selected cells.
             this._resetSelection();
@@ -477,6 +586,7 @@ export class TableSelect implements AbstractTableSelect {
 
             this._activeCell = cell.setActive();
             this._selection.add(cell.setSelected());
+            this._addFullLasso(cell.element);
           } else {
             // Reset all selected cells.
             this._resetSelection();
@@ -509,11 +619,25 @@ export class TableSelect implements AbstractTableSelect {
   }
 
   private sendSelectEvent(): void {
+    const selectedRows = Array.from(
+      new Set(Array.from(this.selection).map((cell: Cell) => cell.row))
+    );
+    const selectedCols = Array.from(
+      new Set(Array.from(this.selection).map((cell: Cell) => cell.col))
+    );
+
+    for (const cell of this.selection) {
+      selectedRows.push(cell.row);
+      selectedCols.push(cell.col);
+    }
+
     const event = new CustomEvent('select', {
       detail: {
         active: this._activeCell,
         selection: this._selection,
         bounds: this.selectionBounds,
+        selectedRows,
+        selectedCols,
       },
     });
 
