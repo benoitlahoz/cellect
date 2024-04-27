@@ -13,6 +13,13 @@
     "vanilla",
     "typescript"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/benoitlahoz/table-select"
+  },
+  "bugs": {
+    "url": "https://github.com/benoitlahoz/table-select/issues"
+  },
   "files": [
     "dist/**/*",
     "package.json",
@@ -20,7 +27,8 @@
   ],
   "scripts": {
     "build": "vite build",
-    "dev": "vite --config vite.config.example.mts"
+    "example": "vite --config vite.config.example.mts",
+    "dev:pack": "npm pack --pack-destination ./packages"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
