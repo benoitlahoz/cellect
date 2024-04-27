@@ -36,6 +36,16 @@ export const useTableSelect = (
    */
   const selectionBounds: Ref<CellBounds | undefined> = ref();
 
+  /**
+   * The current selectedRows made reactive.
+   */
+  const selectedRows: Ref<Array<number>> = ref([]);
+
+  /**
+   * The current selectedCols made reactive.
+   */
+  const selectedCols: Ref<Array<number>> = ref([]);
+
   onMounted(() => {
     if (element.value) {
       nextTick(() => {
@@ -63,6 +73,14 @@ export const useTableSelect = (
     selection.value = event.detail.selection;
     activeCell.value = event.detail.active;
     selectionBounds.value = event.detail.bounds;
+    selectedRows.value = event.detail.selectedRows;
+    selectedCols.value = event.detail.selectedCols;
+  };
+
+  const selectAll = () => {
+    if (tableSelect) {
+      // tableSelect.selectAll();
+    }
   };
 
   const resetSelection = () => {
@@ -95,6 +113,8 @@ export const useTableSelect = (
     selection,
     activeCell,
     selectionBounds,
+    selectedRows,
+    selectedCols,
 
     resetSelection,
   };
