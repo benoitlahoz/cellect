@@ -10,7 +10,7 @@ import {
 
 export class Cell implements AbstractCell {
   /**
-   * Function to add the 'selected' class to cell's element.
+   * Function to add the 'selected', 'active', ... classes to cell's element.
    */
   private _addSelectedClass;
   private _addActiveClass;
@@ -88,10 +88,7 @@ export class Cell implements AbstractCell {
     this._pointerListener = listener;
     this._element.addEventListener(
       this._options.pointerEventChannel,
-      this._pointerListener!,
-      {
-        capture: true,
-      }
+      this._pointerListener!
     );
   }
 
