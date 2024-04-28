@@ -1,6 +1,7 @@
 import { onBeforeUnmount, onMounted, nextTick, watch, ref } from 'vue';
 import type { Ref } from 'vue';
 import { TableSelect } from './modules';
+import type { SelectionCoords } from './types';
 import {
   AbstractTableSelect,
   TableSelectOptions,
@@ -46,6 +47,14 @@ export const useTableSelect = (
    */
   const selectedCols: Ref<Array<number>> = ref([]);
 
+  /**
+   * The current selection coordinates made reactive.
+   */
+  const selectionCoords: Ref<SelectionCoords> = ref({
+    pos: { x: 0, y: 0 },
+    size: { width: 0, height: 0 },
+  });
+
   onMounted(() => {
     if (element.value) {
       nextTick(() => {
@@ -75,6 +84,7 @@ export const useTableSelect = (
     selectionBounds.value = event.detail.bounds;
     selectedRows.value = event.detail.selectedRows;
     selectedCols.value = event.detail.selectedCols;
+    selectionCoords.value = event.detail.coords;
   };
 
   const selectAll = () => {
@@ -115,6 +125,7 @@ export const useTableSelect = (
     selectionBounds,
     selectedRows,
     selectedCols,
+    selectionCoords,
 
     resetSelection,
   };
