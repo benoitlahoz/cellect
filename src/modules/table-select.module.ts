@@ -1,20 +1,21 @@
-import {
+import { TableSelectOptions } from '../types/table-select.abstract';
+import type {
   AbstractTableSelect,
-  TableSelectOptions,
-} from '../types/table-select.abstract';
+  SelectionCoords,
+} from 'types/table-select.abstract';
 import { Cell } from './cell.module';
-import { addClass, cellsFromSelectors, removeClass } from '../functions';
-import { CellBounds } from 'types/cell.abstract';
+import type { CellBounds } from 'types/cell.abstract';
+import { cellsFromSelectors } from '../functions';
 
 const DEFAULT_OPTIONS: TableSelectOptions = {
   rowSelector: 'row',
   colSelector: 'col',
   activeSelector: 'active',
   selectedSelector: 'selected',
-  lassoSelectorPrefix: 'lasso',
   clearOnBlur: true,
   pointerEventChannel: 'mousedown',
-  acceptsKeyboard: true,
+  useKeyboard: true,
+  useLasso: true,
   keyUp: 'ArrowUp',
   keyDown: 'ArrowDown',
   keyLeft: 'ArrowLeft',
@@ -30,31 +31,29 @@ const DEFAULT_OPTIONS: TableSelectOptions = {
 export class TableSelect implements AbstractTableSelect {
   private _options: TableSelectOptions;
 
+  private _element!: HTMLElement;
+
   private _cells: Array<Array<Cell>> = [];
 
   private _contiguousPressed = false;
   private _altPressed = false;
 
   private _activeCell: Cell | undefined;
+  private _activeCoords: SelectionCoords = {
+    pos: { x: 0, y: 0 },
+    size: { width: 0, height: 0 },
+  };
 
   private _selection: Set<Cell> = new Set();
 
-  private _addFullLasso: (element: HTMLElement) => void;
-  private _addLassoTopLeft: (element: HTMLElement) => void;
-  private _addLassoTop: (element: HTMLElement) => void;
-  private _addLassoTopRight: (element: HTMLElement) => void;
-  private _addLassoRight: (element: HTMLElement) => void;
-  private _addLassoBottomRight: (element: HTMLElement) => void;
-  private _addLassoBottom: (element: HTMLElement) => void;
-  private _addLassoBottomLeft: (element: HTMLElement) => void;
-  private _addLassoLeft: (element: HTMLElement) => void;
-  private _removeLasso: (element: HTMLElement) => void;
-
   private _onBoundKeydown;
   private _onBoundKeyup;
+  private _onBoundLassoStart;
+  private _onBoundLasso;
+  private _onBoundLassoEnd;
 
   constructor(
-    private _element: HTMLElement,
+    element: HTMLElement,
     private _data: Array<Array<any>>,
     options: TableSelectOptions
   ) {
@@ -69,80 +68,17 @@ export class TableSelect implements AbstractTableSelect {
     this._onBoundKeydown = this.onKeydown.bind(this);
     this._onBoundKeyup = this.onKeyup.bind(this);
 
-    // Add tabIndex if it doesn't exist, to handle keyboard events.
-
-    if (this._element.tabIndex === -1) {
-      // Strange: we have to reassign -1 manually.
-
-      this._element.tabIndex = -1;
+    if (this._options.useLasso) {
+      this._onBoundLassoStart = this.onLassoStart.bind(this);
+      this._onBoundLasso = this.onLasso.bind(this);
+      this._onBoundLassoEnd = this.onLassoEnd.bind(this);
     }
 
-    // Create functions to add lasso class.
+    // Set the element and compute cells.
+    this.element = element;
 
-    this._addFullLasso = addClass(
-      this._options.lassoSelectorPrefix!,
-      `${this._options.lassoSelectorPrefix!}-top-left`,
-      `${this._options.lassoSelectorPrefix!}-top`,
-      `${this._options.lassoSelectorPrefix!}-top-right`,
-      `${this._options.lassoSelectorPrefix!}-right`,
-      `${this._options.lassoSelectorPrefix!}-bottom-right`,
-      `${this._options.lassoSelectorPrefix!}-bottom`,
-      `${this._options.lassoSelectorPrefix!}-bottom-left`,
-      `${this._options.lassoSelectorPrefix!}-left`
-    );
-    this._addLassoTopLeft = addClass(
-      this._options.lassoSelectorPrefix!,
-      `${this._options.lassoSelectorPrefix!}-top-left`
-    );
-    this._addLassoTop = addClass(
-      this._options.lassoSelectorPrefix!,
-      `${this._options.lassoSelectorPrefix!}-top`
-    );
-    this._addLassoTopRight = addClass(
-      this._options.lassoSelectorPrefix!,
-      `${this._options.lassoSelectorPrefix!}-top-right`
-    );
-    this._addLassoRight = addClass(
-      this._options.lassoSelectorPrefix!,
-      `${this._options.lassoSelectorPrefix!}-right`
-    );
-    this._addLassoBottomRight = addClass(
-      this._options.lassoSelectorPrefix!,
-      `${this._options.lassoSelectorPrefix!}-bottom-right`
-    );
-    this._addLassoBottom = addClass(
-      this._options.lassoSelectorPrefix!,
-      `${this._options.lassoSelectorPrefix!}-bottom`
-    );
-    this._addLassoBottomLeft = addClass(
-      this._options.lassoSelectorPrefix!,
-      `${this._options.lassoSelectorPrefix!}-bottom-left`
-    );
-    this._addLassoLeft = addClass(
-      this._options.lassoSelectorPrefix!,
-      `${this._options.lassoSelectorPrefix!}-left`
-    );
-    this._removeLasso = removeClass(
-      this._options.lassoSelectorPrefix!,
-      `${this._options.lassoSelectorPrefix!}-top-left`,
-      `${this._options.lassoSelectorPrefix!}-top`,
-      `${this._options.lassoSelectorPrefix!}-top-right`,
-      `${this._options.lassoSelectorPrefix!}-right`,
-      `${this._options.lassoSelectorPrefix!}-bottom-right`,
-      `${this._options.lassoSelectorPrefix!}-bottom`,
-      `${this._options.lassoSelectorPrefix!}-bottom-left`,
-      `${this._options.lassoSelectorPrefix!}-left`
-    );
-
-    if (this._options.clearOnBlur) {
-      this.clearOnBlur = true;
-    }
-
-    if (this.options.multiselection) {
-      this.multiselection = true;
-    }
-
-    this.computeCellElements();
+    this.clearOnBlur = this._options.clearOnBlur!;
+    this.multiselection = this.options.multiselection!;
   }
 
   public dispose(): void {
@@ -151,14 +87,26 @@ export class TableSelect implements AbstractTableSelect {
     this.multiselection = false;
     this.clearOnBlur = false;
 
+    this._element.setAttribute('draggable', 'false');
+
+    if (this._options.useLasso || this._onBoundLassoStart) {
+      this._element.removeEventListener(
+        'dragstart',
+        this._onBoundLassoStart as any
+      );
+    }
+
     // Dispose cells.
 
     for (const row of this._cells) {
       for (const cell of row) {
-        this._removeLasso(cell.element);
         cell.dispose();
       }
     }
+
+    this._activeCell = undefined;
+
+    this._computeActiveCoords();
 
     this._selection.clear();
   }
@@ -219,37 +167,11 @@ export class TableSelect implements AbstractTableSelect {
         if (cell) {
           cell.setSelected(true);
           newCells.push(cell);
-
-          if (row === firstRow) {
-            if (col === firstCol) {
-              this._addLassoTopLeft(cell.element);
-              continue;
-            } else if (col === lastCol) {
-              this._addLassoTopRight(cell.element);
-              continue;
-            }
-            this._addLassoTop(cell.element);
-          } else if (row === lastRow) {
-            if (col === firstCol) {
-              this._addLassoBottomLeft(cell.element);
-              continue;
-            } else if (col === lastCol) {
-              this._addLassoBottomRight(cell.element);
-              continue;
-            }
-            this._addLassoBottom(cell.element);
-          }
-
-          if (col === firstCol) {
-            this._addLassoLeft(cell.element);
-          } else if (col === lastCol) {
-            this._addLassoRight(cell.element);
-          }
         }
       }
     }
 
-    // Set selection to selected cells;
+    // Set selection to selected cells.
     this._selection = new Set([...Array.from(this._selection), ...newCells]);
   }
 
@@ -278,10 +200,40 @@ export class TableSelect implements AbstractTableSelect {
     };
   }
 
+  private _computeActiveCoords = (activeOnly = false): void => {
+    // Compute coordinates of the selection.
+
+    const firstCell: HTMLElement =
+      activeOnly && this._activeCell
+        ? this._activeCell.element
+        : this._cells[this.selectionBounds.begin.row][
+            this.selectionBounds.begin.col
+          ].element;
+
+    const lastCell: HTMLElement =
+      activeOnly && this._activeCell
+        ? this._activeCell.element
+        : this._cells[this.selectionBounds.end.row][
+            this.selectionBounds.end.col
+          ].element;
+
+    this._activeCoords = {
+      pos: {
+        x: firstCell.offsetLeft,
+        y: firstCell.offsetTop,
+      },
+      size: {
+        width:
+          lastCell.offsetLeft + lastCell.offsetWidth - firstCell.offsetLeft,
+        height:
+          lastCell.offsetTop + lastCell.offsetHeight - firstCell.offsetTop,
+      },
+    };
+  };
+
   private _resetSelection(): void {
     let i = 0;
     for (const cell of this._selection) {
-      this._removeLasso(cell.element);
       cell.setSelected(false);
       i++;
     }
@@ -290,7 +242,7 @@ export class TableSelect implements AbstractTableSelect {
 
   public resetSelection(): void {
     this._resetSelection();
-    this.sendSelectEvent();
+    this.sendSelectEvent(null);
   }
 
   public cellAtPosition(row: number, col: number): Cell | undefined {
@@ -306,6 +258,37 @@ export class TableSelect implements AbstractTableSelect {
     return;
   }
 
+  private onLassoStart(event: DragEvent) {
+    event.preventDefault();
+
+    this._element.addEventListener('pointermove', this._onBoundLasso as any);
+    window.addEventListener('pointerup', this._onBoundLassoEnd as any);
+  }
+
+  private onLasso(event: PointerEvent) {
+    const element = document
+      .elementsFromPoint(event.x, event.y)
+      .find((element: Element) => element.classList.contains('col'));
+
+    if (element && this._activeCell) {
+      const row = element.getAttribute('data-table-select-row');
+      const col = element.getAttribute('data-table-select-col');
+      if (row && col) {
+        const cell = this.cellAtPosition(parseInt(row), parseInt(col));
+        if (cell) {
+          this._resetSelection();
+          this.selectRange(this._activeCell, cell);
+          this.sendSelectEvent(event);
+        }
+      }
+    }
+  }
+
+  private onLassoEnd(event: PointerEvent) {
+    this._element.removeEventListener('pointermove', this._onBoundLasso as any);
+    window.removeEventListener('pointerup', this._onBoundLassoEnd as any);
+  }
+
   private onPointer(cell: Cell, event: PointerEvent) {
     if (
       !this._options.multiselection ||
@@ -313,11 +296,13 @@ export class TableSelect implements AbstractTableSelect {
     ) {
       // alternate key (e.g. Command or Control) and continuous one (e.g. Shift) are not pressed
 
-      if (this._activeCell && this._activeCell !== cell) {
+      if (this._activeCell !== cell) {
         // Current cell is not the same as active one, or no active cell is defined for now: reset active cell
         // and all selection.
 
-        this._activeCell.setActive(false);
+        if (this._activeCell) {
+          this._activeCell.setActive(false);
+        }
 
         this._resetSelection();
         this._activeCell = undefined;
@@ -325,9 +310,8 @@ export class TableSelect implements AbstractTableSelect {
 
       this._activeCell = cell.setActive(true);
       this._selection.add(cell.setSelected(true));
-      this._addFullLasso(cell.element);
 
-      this.sendSelectEvent();
+      this.sendSelectEvent(event);
 
       return;
     } else if (this._options.multiselection && this._altPressed) {
@@ -352,18 +336,11 @@ export class TableSelect implements AbstractTableSelect {
 
           if (this._activeCell) {
             this._activeCell.setActive(false);
-            this._removeLasso(this._activeCell.element);
             this._activeCell = undefined;
-
-            // Remove lasso from all selected cells.
-            for (const cell of this.selection) {
-              this._removeLasso(cell.element);
-            }
           }
 
           this._activeCell = cell.setActive(true);
           this._selection.add(cell.setSelected(true));
-          this._addFullLasso(cell.element);
         }
       }
     } else if (
@@ -379,7 +356,7 @@ export class TableSelect implements AbstractTableSelect {
       this.selectRange(this._activeCell, cell);
     }
 
-    this.sendSelectEvent();
+    this.sendSelectEvent(event);
   }
 
   private onKeydown(event: KeyboardEvent): void {
@@ -404,7 +381,7 @@ export class TableSelect implements AbstractTableSelect {
        * Keyboard navigation.
        */
       case this._options.keyDown: {
-        if (!this._options.acceptsKeyboard || !this._activeCell) break;
+        if (!this._options.useKeyboard || !this._activeCell) break;
 
         // Get next row and col according to current selection range.
         const bounds = this.selectionBounds;
@@ -438,7 +415,6 @@ export class TableSelect implements AbstractTableSelect {
 
             this._activeCell = cell.setActive();
             this._selection.add(cell.setSelected());
-            this._addFullLasso(cell.element);
           } else {
             // Reset all selected cells.
             this._resetSelection();
@@ -447,13 +423,13 @@ export class TableSelect implements AbstractTableSelect {
           }
         }
 
-        this.sendSelectEvent();
+        this.sendSelectEvent(event);
 
         break;
       }
 
       case this._options.keyUp: {
-        if (!this._options.acceptsKeyboard || !this._activeCell) break;
+        if (!this._options.useKeyboard || !this._activeCell) break;
 
         // Get next row and col according to current selection range.
         const bounds = this.selectionBounds;
@@ -485,7 +461,6 @@ export class TableSelect implements AbstractTableSelect {
 
             this._activeCell = cell.setActive();
             this._selection.add(cell.setSelected());
-            this._addFullLasso(cell.element);
           } else {
             // Reset all selected cells.
             this._resetSelection();
@@ -494,13 +469,13 @@ export class TableSelect implements AbstractTableSelect {
           }
         }
 
-        this.sendSelectEvent();
+        this.sendSelectEvent(event);
 
         break;
       }
 
       case this._options.keyLeft: {
-        if (!this._options.acceptsKeyboard || !this._activeCell) break;
+        if (!this._options.useKeyboard || !this._activeCell) break;
 
         // Get next row and col according to current selection range.
         const bounds = this.selectionBounds;
@@ -534,7 +509,6 @@ export class TableSelect implements AbstractTableSelect {
 
             this._activeCell = cell.setActive();
             this._selection.add(cell.setSelected());
-            this._addFullLasso(cell.element);
           } else {
             // Reset all selected cells.
             this._resetSelection();
@@ -543,13 +517,13 @@ export class TableSelect implements AbstractTableSelect {
           }
         }
 
-        this.sendSelectEvent();
+        this.sendSelectEvent(event);
 
         break;
       }
 
       case this._options.keyRight: {
-        if (!this._options.acceptsKeyboard || !this._activeCell) break;
+        if (!this._options.useKeyboard || !this._activeCell) break;
 
         // Get next row and col according to current selection range.
         const bounds = this.selectionBounds;
@@ -586,7 +560,6 @@ export class TableSelect implements AbstractTableSelect {
 
             this._activeCell = cell.setActive();
             this._selection.add(cell.setSelected());
-            this._addFullLasso(cell.element);
           } else {
             // Reset all selected cells.
             this._resetSelection();
@@ -595,7 +568,7 @@ export class TableSelect implements AbstractTableSelect {
           }
         }
 
-        this.sendSelectEvent();
+        this.sendSelectEvent(event);
 
         break;
       }
@@ -618,7 +591,9 @@ export class TableSelect implements AbstractTableSelect {
     }
   }
 
-  private sendSelectEvent(): void {
+  private sendSelectEvent(e: any): void {
+    // Get selected rows and columns indexes.
+
     const selectedRows = Array.from(
       new Set(Array.from(this.selection).map((cell: Cell) => cell.row))
     );
@@ -631,11 +606,17 @@ export class TableSelect implements AbstractTableSelect {
       selectedCols.push(cell.col);
     }
 
+    // Compute coordinates of the selection / active cell (if alt modifier is pressed).
+    this._computeActiveCoords(this._altPressed);
+
     const event = new CustomEvent('select', {
       detail: {
+        // Original event.
+        event: e,
         active: this._activeCell,
         selection: this._selection,
         bounds: this.selectionBounds,
+        coords: this._activeCoords,
         selectedRows,
         selectedCols,
       },
@@ -652,7 +633,39 @@ export class TableSelect implements AbstractTableSelect {
     }
 
     this._cells.length = 0;
+
+    if (this._element) {
+      // Reset element state.
+
+      this.multiselection = false;
+      this.clearOnBlur = false;
+
+      this._element.setAttribute('draggable', 'false');
+      this._element.removeEventListener(
+        'dragstart',
+        this._onBoundLassoStart as any
+      );
+    }
+
     this._element = element;
+
+    if (this._element.tabIndex === -1) {
+      // Strange: we have to reassign -1 manually.
+
+      this._element.tabIndex = -1;
+    }
+
+    this.multiselection = this._options.multiselection!;
+    this.clearOnBlur = this._options.clearOnBlur!;
+
+    if (this._options.useLasso) {
+      this._element.style.position = 'relative';
+      this._element.setAttribute('draggable', 'true');
+      this._element.addEventListener(
+        'dragstart',
+        this._onBoundLassoStart as any
+      );
+    }
 
     this.computeCellElements();
   }
@@ -674,16 +687,18 @@ export class TableSelect implements AbstractTableSelect {
   }
 
   public set multiselection(allow: boolean) {
-    // Make sure previous event listeners are removed.
+    if (this._element) {
+      // Make sure previous event listeners are removed.
 
-    this._element.removeEventListener('keydown', this._onBoundKeydown);
-    this._element.removeEventListener('keyup', this._onBoundKeyup);
+      this._element.removeEventListener('keydown', this._onBoundKeydown);
+      this._element.removeEventListener('keyup', this._onBoundKeyup);
 
-    this._options.multiselection = allow;
+      this._options.multiselection = allow;
 
-    if (this._options.multiselection) {
-      this._element.addEventListener('keydown', this._onBoundKeydown);
-      this._element.addEventListener('keyup', this._onBoundKeyup);
+      if (this._options.multiselection) {
+        this._element.addEventListener('keydown', this._onBoundKeydown);
+        this._element.addEventListener('keyup', this._onBoundKeyup);
+      }
     }
   }
 
