@@ -63,7 +63,7 @@ export abstract class AbstractCell {
   public abstract setSelected(selected: boolean): AbstractCell;
 
   /**
-   * Add a listener to the channel passed as  pointer vent in options.
+   * Add a listener to the channel passed as pointer event in options.
    *
    * @param { EventListener } listener The listener called when the pointer event is emitted.
    */

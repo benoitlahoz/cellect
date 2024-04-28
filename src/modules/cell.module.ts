@@ -35,6 +35,23 @@ export class Cell implements AbstractCell {
     private _range: CellRange,
     private _options: CellOptions
   ) {
+    this._element.setAttribute(
+      'data-table-select-row',
+      `${this._range.index.row}`
+    );
+    this._element.setAttribute(
+      'data-table-select-col',
+      `${this._range.index.col}`
+    );
+    this._element.setAttribute(
+      'data-table-select-width',
+      `${this._range.size.width}`
+    );
+    this._element.setAttribute(
+      'data-table-select-height',
+      `${this._range.size.height}`
+    );
+
     this._addSelectedClass = addClass(this._options.selectedSelector);
     this._addActiveClass = addClass(this._options.activeSelector);
 
