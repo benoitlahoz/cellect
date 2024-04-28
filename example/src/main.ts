@@ -1,5 +1,5 @@
 import { createApp } from 'vue';
-// import VueImagery from './lib';
+import './design/main.sass';
 
 import App from './app.vue';
 
