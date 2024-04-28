@@ -18,11 +18,6 @@ export interface TableSelectOptions {
    */
   selectedSelector?: string;
   /**
-   * The prefix for selected cells' 'lasso' class.
-   * e.g.: 'lasso' will generate 'lasso-left', lasso-top-right', etc.
-   */
-  lassoSelectorPrefix?: string;
-  /**
    * Clear selection when container element is unfocused.
    */
   clearOnBlur?: boolean;
@@ -32,9 +27,13 @@ export interface TableSelectOptions {
    */
   pointerEventChannel?: keyof HTMLElementEventMap;
   /**
-   * Does the selection accepts keyboard input (typically arrows to naviate the table).
+   * Does the selection accepts keyboard input (typically arrows to navigate the table).
    */
-  acceptsKeyboard?: boolean;
+  useKeyboard?: boolean;
+  /**
+   * Is it allowed to drag a 'lasso' to select cells.
+   */
+  useLasso?: boolean;
   /**
    * Key to listen to for navigating up in the table.
    * (e.g. `'ArrowUp'`)
@@ -72,6 +71,17 @@ export interface TableSelectOptions {
    * Typically, if the table contains `input` elements that mutate the data, set to `false`.
    */
   resetOnChange?: boolean;
+}
+
+export interface SelectionCoords {
+  pos: {
+    x: number;
+    y: number;
+  };
+  size: {
+    width: number;
+    height: number;
+  };
 }
 
 export abstract class AbstractTableSelect {
