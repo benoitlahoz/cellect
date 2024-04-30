@@ -1,28 +1,3 @@
-export const cellsFromSelectors =
-  (rowSelector: string, colSelector: string) => (element: HTMLElement) => {
-    if (!element) {
-      throw new Error('Element may not be mounted.');
-    }
-
-    const cellElements = [];
-
-    // Generic functions for selectors.
-    const getChildrenForRowSelector = getElementsByClassName(rowSelector);
-    const getChildrenForColSelector = getElementsByClassName(colSelector);
-
-    const rows = getChildrenForRowSelector(element);
-    for (const row of rows) {
-      const cols = getChildrenForColSelector(row as HTMLElement);
-      const colsCells = [];
-      for (const col of cols) {
-        colsCells.push(col);
-      }
-      cellElements.push(colsCells);
-    }
-
-    return cellElements;
-  };
-
 export const getElementsByClassName =
   (selector: string) =>
   (element: HTMLElement): Array<Element> => {
@@ -48,4 +23,16 @@ export const removeClass =
   (...args: string[]) =>
   (element: HTMLElement) => {
     element.classList.remove(...args);
+  };
+
+export const addListener =
+  (element: Element) =>
+  (channel: string, listener: EventListener, options?: any) => {
+    element.addEventListener(channel, listener, options);
+  };
+
+export const removeListener =
+  (element: Element) =>
+  (channel: string, listener: EventListener, options?: any) => {
+    element.removeEventListener(channel, listener, options);
   };
