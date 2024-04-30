@@ -13,6 +13,11 @@ export interface CellRange {
   size: CellSize;
 }
 
+export interface CellPixelsRange {
+  index: CellIndex;
+  size: CellSize;
+}
+
 export interface CellBounds {
   begin: CellIndex;
   end: CellIndex;
