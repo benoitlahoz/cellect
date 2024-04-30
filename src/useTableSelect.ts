@@ -1,7 +1,17 @@
-import { onBeforeUnmount, onMounted, nextTick, watch, ref } from 'vue';
-import type { Ref } from 'vue';
+import {
+  onBeforeUnmount,
+  onMounted,
+  nextTick,
+  watch,
+  ref,
+  reactive,
+  toRefs,
+  computed,
+  toRef,
+} from 'vue';
+import type { ReactiveEffect, Ref } from 'vue';
 import { TableSelect } from './modules';
-import type { SelectionCoords } from './types';
+import type { SelectionRect } from './types';
 import {
   AbstractTableSelect,
   TableSelectOptions,
@@ -50,17 +60,32 @@ export const useTableSelect = (
   /**
    * The current selection coordinates made reactive.
    */
-  const selectionCoords: Ref<SelectionCoords> = ref({
+  const activeRect: Ref<SelectionRect> = ref({
     pos: { x: 0, y: 0 },
     size: { width: 0, height: 0 },
   });
 
+  /**
+   * Current state of the contiguous modifier (e.g. 'Shift')
+   */
+  const contiguousModifier: Ref<boolean> = ref(false);
+
+  /**
+   * Current state of the alternate modifier (e.g. 'Command or Control')
+   */
+  const altModifier: Ref<boolean> = ref(false);
+
+  /**
+   * The current selection lock status made reactive.
+   */
+  const isLocked: Ref<boolean> = ref(false);
   onMounted(() => {
     if (element.value) {
       nextTick(() => {
         if (element.value) {
           tableSelect = new TableSelect(element.value, data.value, options);
           element.value.addEventListener('select', onSelect as any);
+          element.value.addEventListener('modifier-change', onModifier as any);
 
           enableDataWatcher();
         }
@@ -71,6 +96,7 @@ export const useTableSelect = (
   onBeforeUnmount(() => {
     if (element.value) {
       element.value.removeEventListener('select', onSelect as any);
+      element.value.removeEventListener('modifier-change', onModifier as any);
     }
 
     if (tableSelect) {
@@ -84,12 +110,45 @@ export const useTableSelect = (
     selectionBounds.value = event.detail.bounds;
     selectedRows.value = event.detail.selectedRows;
     selectedCols.value = event.detail.selectedCols;
-    selectionCoords.value = event.detail.coords;
+    activeRect.value = event.detail.rect;
   };
 
-  const selectAll = () => {
+  const onModifier = (event: CustomEvent) => {
+    contiguousModifier.value = event.detail.contiguousModifier;
+    altModifier.value = event.detail.altModifier;
+  };
+
+  const selectOne = (
+    row: number,
+    col: number,
+    resetSelection = true,
+    onlyActiveRect = true,
+    active = true
+  ): void => {
     if (tableSelect) {
-      // tableSelect.selectAll();
+      tableSelect.selectOne(row, col, resetSelection, onlyActiveRect, active);
+    }
+  };
+
+  const selectRow = (
+    row: number,
+    moveActive = true,
+    resetSelection = true
+  ): void => {
+    if (tableSelect) {
+      tableSelect.selectRow(row, moveActive, resetSelection);
+    }
+  };
+
+  const selectCol = (col: number, resetSelection = true): void => {
+    if (tableSelect) {
+      tableSelect.selectCol(col, resetSelection);
+    }
+  };
+
+  const selectAll = (activeAtFirst = false) => {
+    if (tableSelect) {
+      tableSelect.selectAll(activeAtFirst);
     }
   };
 
@@ -97,6 +156,34 @@ export const useTableSelect = (
     if (tableSelect) {
       tableSelect.resetSelection();
     }
+  };
+
+  const lockSelection = () => {
+    if (tableSelect) {
+      tableSelect.lock();
+      isLocked.value = tableSelect.isLocked;
+    }
+  };
+
+  const unlockSelection = () => {
+    if (tableSelect) {
+      tableSelect.unlock();
+      isLocked.value = tableSelect.isLocked;
+    }
+  };
+
+  const resetModifiers = () => {
+    if (tableSelect) {
+      tableSelect.resetModifiers();
+    }
+  };
+
+  const computeActiveRect = (activeOnly = false) => {
+    if (tableSelect) {
+      activeRect.value = tableSelect.computeRect(activeOnly);
+    }
+
+    return activeRect.value;
   };
 
   /**
@@ -114,7 +201,7 @@ export const useTableSelect = (
       },
       {
         immediate: true,
-        deep: true,
+        deep: false,
       }
     );
   };
@@ -125,8 +212,22 @@ export const useTableSelect = (
     selectionBounds,
     selectedRows,
     selectedCols,
-    selectionCoords,
+    activeRect,
 
+    selectOne,
+    selectRow,
+    selectCol,
+    selectAll,
     resetSelection,
+
+    lockSelection,
+    unlockSelection,
+    isLocked,
+
+    contiguousModifier,
+    altModifier,
+    resetModifiers,
+
+    computeActiveRect,
   };
 };
