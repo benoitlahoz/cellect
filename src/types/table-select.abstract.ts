@@ -1,4 +1,4 @@
-import { AbstractCell, CellBounds } from './cell.abstract';
+import type { AbstractCell, CellBounds, CellIndex } from './cell.abstract';
 
 export interface TableSelectOptions {
   /**
@@ -30,10 +30,6 @@ export interface TableSelectOptions {
    * Does the selection accepts keyboard input (typically arrows to navigate the table).
    */
   useKeyboard?: boolean;
-  /**
-   * Is it allowed to drag a 'lasso' to select cells.
-   */
-  useLasso?: boolean;
   /**
    * Key to listen to for navigating up in the table.
    * (e.g. `'ArrowUp'`)
@@ -67,13 +63,25 @@ export interface TableSelectOptions {
    */
   multiselection?: boolean;
   /**
+   * Is it allowed to drag a 'lasso' to select cells.
+   */
+  useLasso?: boolean;
+  /**
    * Reset selection when data changes.
    * Typically, if the table contains `input` elements that mutate the data, set to `false`.
    */
   resetOnChange?: boolean;
 }
 
-export interface SelectionCoords {
+export interface TableSelectModifiersState {
+  contiguous: boolean;
+  alt: boolean;
+}
+
+/**
+ * The selection coordinates (e.g. in pixels) according to the Cell HTML elements.
+ */
+export interface SelectionRect {
   pos: {
     x: number;
     y: number;
@@ -121,18 +129,105 @@ export abstract class AbstractTableSelect {
    */
   public abstract selectionBounds: CellBounds;
 
+  public abstract activeCell: AbstractCell | undefined;
+
+  public abstract selectionRect: SelectionRect;
+
+  /**
+   * Computes the active selection rectangle in pixels. It may be used for lasso.
+   *
+   * @param { boolean } activeOnly Will only compute the active cell coordinates.
+   *
+   * @returns { SelectionRect } The coordinates in pixels of the active selection.
+   */
+  public abstract computeRect(activeOnly: boolean): SelectionRect;
+
   /**
    * Cleans the instance, its selection and its elements' event listeners.
    */
   public abstract dispose(): void;
 
   /**
-   * Add a range from a `Cell` to another `Cell` to the selection.
+   * Locks selection.
+   */
+  public abstract lock(): void;
+
+  /**
+   * Unlocks selection.
+   */
+  public abstract unlock(): void;
+
+  /**
+   * Lock status of the selection.
+   */
+  public abstract isLocked: boolean;
+
+  /**
+   * Reset the modifiers keys to their 'up' state.
+   */
+  public abstract resetModifiers(): void;
+
+  /**
+   * Select a sngle cell by its indexes.
+   *
+   * @param { number } row The row index of the cell.
+   * @param { number } col The column index of the cell.
+   * @param { boolean } resetSelection If `true` reset the selection (this cell will be the only one selected).
+   * @param { boolean } onlyActiveCoords If `true` compute only the active cell rect.
+   * @param { boolean } active Set this cell as active.
+   */
+  public abstract selectOne(
+    row: number,
+    col: number,
+    resetSelection: boolean,
+    onlyActiveRect: boolean,
+    active: boolean
+  ): void;
+
+  public abstract selectRangeByIndex(begin: CellIndex, end: CellIndex): void;
+  public abstract unselectRangeByIndex(begin: CellIndex, end: CellIndex): void;
+  public abstract modifiersState: TableSelectModifiersState;
+
+  /**
+   * Selects a whole row.
+   *
+   * @param { number } row The row to select.
+   * @param { boolean } moveActive If `true` set the active cell at the beginning of the row.
+   * @param { boolean } resetSelection If `true` reset the selection.
+   */
+  public abstract selectRow(
+    row: number,
+    moveActive?: boolean,
+    resetSelection?: boolean
+  ): void;
+
+  /**
+   * Selects a whole column.
+   *
+   * @param { number } col The column to select.
+   * @param { boolean } resetSelection If `true` reset the selection.
+   */
+  public abstract selectCol(col: number, resetSelection?: boolean): void;
+
+  /**
+   * Add / remove a range from a `Cell` to another `Cell` to the selection.
    *
    * @param { AbstractCell } begin A cell to begin from.
    * @param { AbstractCell } end  A cell to end to.
+   * @param { boolean } unselect Unselect instead of selecting.
    */
-  public abstract selectRange(begin: AbstractCell, end: AbstractCell): void;
+  public abstract selectRange(
+    begin: AbstractCell,
+    end: AbstractCell,
+    unselect?: boolean
+  ): void;
+
+  /**
+   * Select all cells.
+   *
+   * @param { boolean } activeAtFirst Whether the 'active' cell is set at [0, 0] of the cells array.
+   */
+  public abstract selectAll(activeAtFirst?: boolean): void;
 
   /**
    * Unselect all cells.
@@ -140,11 +235,12 @@ export abstract class AbstractTableSelect {
   public abstract resetSelection(): void;
 
   /**
-   * Get a `Cell` at given position (row, column).
+   * Get a `Cell` at given indexes (row, column).
+   *
    * @param { number } row The row's index.
    * @param { number } col The column's index.
    */
-  public abstract cellAtPosition(
+  public abstract cellAtIndex(
     row: number,
     col: number
   ): AbstractCell | undefined;
