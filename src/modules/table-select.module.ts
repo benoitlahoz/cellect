@@ -1,13 +1,26 @@
 import { TableSelectOptions } from '../types/table-select.abstract';
 import type {
   AbstractTableSelect,
-  SelectionCoords,
+  SelectionRect,
+  TableSelectModifiersState,
 } from 'types/table-select.abstract';
 import { Cell } from './cell.module';
-import type { CellBounds } from 'types/cell.abstract';
-import { cellsFromSelectors } from '../functions';
+import type { AbstractCell, CellBounds, CellIndex } from 'types/cell.abstract';
+import {
+  cellsFromSelectors,
+  boundsForSelection,
+  cellAtIndex,
+  nextCellOn,
+  selectRange,
+  selectAll,
+} from '../utils';
+import { SelectionLasso } from './lasso.module';
+import { TableSelectEventSender } from './table-select-event.module';
 
-const DEFAULT_OPTIONS: TableSelectOptions = {
+/**
+ * Default options for this `TableSelect` instance.
+ */
+export const DEFAULT_OPTIONS: TableSelectOptions = {
   rowSelector: 'row',
   colSelector: 'col',
   activeSelector: 'active',
@@ -28,6 +41,14 @@ const DEFAULT_OPTIONS: TableSelectOptions = {
   resetOnChange: true,
 };
 
+/**
+ * Data attributes to add to `AbstractCell` elements.
+ */
+export enum TableSelectDataAttributes {
+  Row = 'data-table-select-row',
+  Col = 'data-table-select-col',
+}
+
 export class TableSelect implements AbstractTableSelect {
   private _options: TableSelectOptions;
 
@@ -39,7 +60,7 @@ export class TableSelect implements AbstractTableSelect {
   private _altPressed = false;
 
   private _activeCell: Cell | undefined;
-  private _activeCoords: SelectionCoords = {
+  private _rect: SelectionRect = {
     pos: { x: 0, y: 0 },
     size: { width: 0, height: 0 },
   };
@@ -48,9 +69,14 @@ export class TableSelect implements AbstractTableSelect {
 
   private _onBoundKeydown;
   private _onBoundKeyup;
+
+  private _lasso: SelectionLasso | undefined;
+
   private _onBoundLassoStart;
   private _onBoundLasso;
   private _onBoundLassoEnd;
+
+  private _isLocked = false;
 
   constructor(
     element: HTMLElement,
@@ -69,6 +95,8 @@ export class TableSelect implements AbstractTableSelect {
     this._onBoundKeyup = this.onKeyup.bind(this);
 
     if (this._options.useLasso) {
+      this._lasso = new SelectionLasso(this);
+
       this._onBoundLassoStart = this.onLassoStart.bind(this);
       this._onBoundLasso = this.onLasso.bind(this);
       this._onBoundLassoEnd = this.onLassoEnd.bind(this);
@@ -82,8 +110,6 @@ export class TableSelect implements AbstractTableSelect {
   }
 
   public dispose(): void {
-    // Remove events listeners associated.
-
     this.multiselection = false;
     this.clearOnBlur = false;
 
@@ -96,6 +122,13 @@ export class TableSelect implements AbstractTableSelect {
       );
     }
 
+    this._resetActive();
+    this._selection.clear();
+    this._rect = {
+      pos: { x: 0, y: 0 },
+      size: { width: 0, height: 0 },
+    };
+
     // Dispose cells.
 
     for (const row of this._cells) {
@@ -103,12 +136,14 @@ export class TableSelect implements AbstractTableSelect {
         cell.dispose();
       }
     }
+  }
 
-    this._activeCell = undefined;
+  public lock(): void {
+    this._isLocked = true;
+  }
 
-    this._computeActiveCoords();
-
-    this._selection.clear();
+  public unlock(): void {
+    this._isLocked = false;
   }
 
   /**
@@ -152,72 +187,151 @@ export class TableSelect implements AbstractTableSelect {
     }
   }
 
-  public selectRange(begin: Cell, end: Cell) {
-    const firstRow = Math.min(begin.row, end.row);
-    const lastRow = Math.max(begin.row, end.row);
-    const firstCol = Math.min(begin.col, end.col);
-    const lastCol = Math.max(begin.col, end.col);
+  public selectOne(
+    row: number,
+    col: number,
+    resetSelection = true,
+    onlyActiveRect = true,
+    active = true
+  ): void {
+    const cell = this.cellAtIndex(row, col);
+    if (cell) {
+      if (active) {
+        this._setActive(cell, resetSelection);
+      } else {
+        this._selection.add(cell.setSelected(true));
+      }
+      TableSelectEventSender.sendSelect(this, undefined, onlyActiveRect);
+    }
+  }
 
-    const newCells = [];
+  public selectRange(begin: Cell, end: Cell, unselect = false) {
+    this._selection = selectRange(
+      this._cells,
+      this._selection,
+      begin,
+      end,
+      unselect
+    ) as Set<Cell>;
+  }
 
-    for (let row = firstRow; row < lastRow + 1; row++) {
-      for (let col = firstCol; col < lastCol + 1; col++) {
-        const cell = this.cellAtPosition(row, col);
+  public selectRangeByIndex(
+    begin: CellIndex,
+    end: CellIndex,
+    send = true
+  ): void {
+    const beginCell = cellAtIndex(this._cells, begin.row, begin.col) as Cell;
+    const endCell = cellAtIndex(this._cells, end.row, end.col) as Cell;
 
-        if (cell) {
-          cell.setSelected(true);
-          newCells.push(cell);
-        }
+    if (beginCell && endCell) {
+      this._selection = selectRange(
+        this._cells,
+        this._selection,
+        beginCell,
+        endCell,
+        false
+      ) as Set<Cell>;
+    }
+
+    if (send) {
+      TableSelectEventSender.sendSelect(this);
+    }
+  }
+
+  public unselectRangeByIndex(
+    begin: CellIndex,
+    end: CellIndex,
+    send = true
+  ): void {
+    const beginCell = cellAtIndex(this._cells, begin.row, begin.col) as Cell;
+    const endCell = cellAtIndex(this._cells, end.row, end.col) as Cell;
+
+    this._selection = selectRange(
+      this._cells,
+      this._selection,
+      beginCell,
+      endCell,
+      true
+    ) as Set<Cell>;
+
+    if (send) {
+      TableSelectEventSender.sendSelect(this);
+    }
+  }
+
+  public selectRow(
+    row: number,
+    moveActive = true,
+    resetSelection = true
+  ): void {
+    if (resetSelection) this._resetSelection();
+
+    this.selectRangeByIndex(
+      {
+        row,
+        col: 0,
+      },
+      {
+        row,
+        col: this._cells[row].length - 1,
+      },
+      false
+    );
+
+    const begin = this.cellAtIndex(row, 0);
+    if (moveActive && begin) {
+      this._setActive(begin);
+    }
+
+    TableSelectEventSender.sendSelect(this);
+  }
+
+  public selectCol(col: number, resetSelection = true): void {
+    const begin = cellAtIndex(this._cells, 0, col) as Cell;
+    const end = cellAtIndex(this._cells, this._cells.length - 1, col) as Cell;
+
+    if (resetSelection) this._resetSelection();
+
+    this.selectRange(begin, end);
+
+    this._setActive(begin);
+    TableSelectEventSender.sendSelect(this);
+  }
+
+  public selectAll(activeAtFirst = false): void {
+    this._selection = selectAll(this._cells) as Set<Cell>;
+
+    if (activeAtFirst) {
+      const cell = this.cellAtIndex(0, 0);
+      if (cell) {
+        this._activeCell?.setActive(false);
+        this._activeCell = cell.setActive(true);
       }
     }
 
-    // Set selection to selected cells.
-    this._selection = new Set([...Array.from(this._selection), ...newCells]);
+    TableSelectEventSender.sendSelect(this);
   }
 
   public get selectionBounds(): CellBounds {
-    let minRow = Number.POSITIVE_INFINITY;
-    let maxRow = Number.NEGATIVE_INFINITY;
-    let minCol = Number.POSITIVE_INFINITY;
-    let maxCol = Number.NEGATIVE_INFINITY;
-
-    for (const cell of this._selection) {
-      if (cell.row <= minRow) minRow = cell.row;
-      if (cell.col <= minCol) minCol = cell.col;
-      if (cell.row >= maxRow) maxRow = cell.row;
-      if (cell.col >= maxCol) maxCol = cell.col;
-    }
-
-    return {
-      begin: {
-        row: minRow,
-        col: minCol,
-      },
-      end: {
-        row: maxRow,
-        col: maxCol,
-      },
-    };
+    return boundsForSelection(this._selection);
   }
 
-  private _computeActiveCoords = (activeOnly = false): void => {
-    // Compute coordinates of the selection.
+  public computeRect(activeOnly = false): SelectionRect {
+    // Compute bounds of the selection in pixels.
+
+    const bounds = this.selectionBounds;
 
     const firstCell: HTMLElement =
       activeOnly && this._activeCell
         ? this._activeCell.element
-        : this._cells[this.selectionBounds.begin.row][
-            this.selectionBounds.begin.col
-          ].element;
+        : this._cells[bounds.begin.row][bounds.begin.col].element;
 
     const lastCell: HTMLElement =
       activeOnly && this._activeCell
         ? this._activeCell.element
-        : this._cells[this.selectionBounds.end.row][
-            this.selectionBounds.end.col
-          ].element;
+        : this._cells[bounds.end.row][bounds.end.col].element;
 
-    this._activeCoords = {
+    this._rect = {
       pos: {
         x: firstCell.offsetLeft,
         y: firstCell.offsetTop,
@@ -229,7 +343,9 @@ export class TableSelect implements AbstractTableSelect {
           lastCell.offsetTop + lastCell.offsetHeight - firstCell.offsetTop,
       },
     };
-  };
+
+    return this._rect;
+  }
 
   private _resetSelection(): void {
     let i = 0;
@@ -242,24 +358,49 @@ export class TableSelect implements AbstractTableSelect {
 
   public resetSelection(): void {
     this._resetSelection();
-    this.sendSelectEvent(null);
+    TableSelectEventSender.sendSelect(this);
   }
 
-  public cellAtPosition(row: number, col: number): Cell | undefined {
-    const firstIndex = this._cells.findIndex((entry: Array<Cell>) =>
-      entry.some((cell: Cell) => cell.row === row && cell.col === col)
-    );
-    if (firstIndex > -1) {
-      const secondIndex = this._cells[firstIndex].findIndex(
-        (cell: Cell) => cell.row === row && cell.col === col
-      );
-      return this._cells[firstIndex][secondIndex];
+  private _setActive(cell: Cell, resetSelection = false): void {
+    if (resetSelection) {
+      this._resetSelection();
     }
-    return;
+
+    this._resetActive();
+    this._activeCell = cell.setActive(true);
+    this._selection.add(cell.setSelected(true));
+  }
+
+  private _resetActive(): void {
+    if (this._activeCell) {
+      this._activeCell.setActive(false);
+      this._activeCell = undefined;
+    }
+  }
+
+  public cellAtIndex(row: number, col: number): Cell | undefined {
+    return cellAtIndex(this._cells, row, col) as Cell | undefined;
+  }
+
+  private _handleKeySelect(cell: Cell): void {
+    if (this._activeCell && cell) {
+      if (!this._contiguousPressed) {
+        // Set cell as active after resetting current selection.
+        this._setActive(cell, true);
+      } else {
+        // Reset all selected cells.
+        this._resetSelection();
+
+        // Select range from active cell to next cell.
+        this.selectRange(this._activeCell, cell);
+      }
+    }
   }
 
   private onLassoStart(event: DragEvent) {
     event.preventDefault();
+
+    if (this._isLocked) return;
 
     this._element.addEventListener('pointermove', this._onBoundLasso as any);
     window.addEventListener('pointerup', this._onBoundLassoEnd as any);
@@ -271,14 +412,14 @@ export class TableSelect implements AbstractTableSelect {
       .find((element: Element) => element.classList.contains('col'));
 
     if (element && this._activeCell) {
-      const row = element.getAttribute('data-table-select-row');
-      const col = element.getAttribute('data-table-select-col');
+      const row = element.getAttribute(TableSelectDataAttributes.Row);
+      const col = element.getAttribute(TableSelectDataAttributes.Col);
       if (row && col) {
-        const cell = this.cellAtPosition(parseInt(row), parseInt(col));
+        const cell = this.cellAtIndex(parseInt(row), parseInt(col));
         if (cell) {
           this._resetSelection();
           this.selectRange(this._activeCell, cell);
-          this.sendSelectEvent(event);
+          TableSelectEventSender.sendSelect(this, event);
         }
       }
     }
@@ -287,33 +428,21 @@ export class TableSelect implements AbstractTableSelect {
   private onLassoEnd(event: PointerEvent) {
     this._element.removeEventListener('pointermove', this._onBoundLasso as any);
     window.removeEventListener('pointerup', this._onBoundLassoEnd as any);
+    TableSelectEventSender.sendSelect(this, event);
   }
 
   private onPointer(cell: Cell, event: PointerEvent) {
+    if (this._isLocked) return;
+
     if (
       !this._options.multiselection ||
       (!this._altPressed && !this._contiguousPressed)
     ) {
       // alternate key (e.g. Command or Control) and continuous one (e.g. Shift) are not pressed
+      // TODO: handle toggle unselect option.
 
-      if (this._activeCell !== cell) {
-        // Current cell is not the same as active one, or no active cell is defined for now: reset active cell
-        // and all selection.
-
-        if (this._activeCell) {
-          this._activeCell.setActive(false);
-        }
-
-        this._resetSelection();
-        this._activeCell = undefined;
-      }
-
-      this._activeCell = cell.setActive(true);
-      this._selection.add(cell.setSelected(true));
-
-      this.sendSelectEvent(event);
-
-      return;
+      // Set cell as active after resetting current selection.
+      this._setActive(cell, true);
     } else if (this._options.multiselection && this._altPressed) {
       // alternate key is pressed.
 
@@ -333,14 +462,7 @@ export class TableSelect implements AbstractTableSelect {
         } else {
           // Click + alt on an unselected cell
           // Set it as active and add it to selection without resetting the current selection.
-
-          if (this._activeCell) {
-            this._activeCell.setActive(false);
-            this._activeCell = undefined;
-          }
-
-          this._activeCell = cell.setActive(true);
-          this._selection.add(cell.setSelected(true));
+          this._setActive(cell, false);
         }
       }
     } else if (
@@ -356,10 +478,12 @@ export class TableSelect implements AbstractTableSelect {
       this.selectRange(this._activeCell, cell);
     }
 
-    this.sendSelectEvent(event);
+    TableSelectEventSender.sendSelect(this, event);
   }
 
   private onKeydown(event: KeyboardEvent): void {
+    if (this._isLocked) return;
+
     switch (event.key) {
       /**
        * Multiselection handlers with modifier keys.
@@ -368,12 +492,14 @@ export class TableSelect implements AbstractTableSelect {
         if (!this._options.multiselection) return;
 
         this._contiguousPressed = true;
+        TableSelectEventSender.sendModifierChange(this, event);
         break;
       }
       case this._options.altSelectionModifier: {
         if (!this._options.multiselection) return;
 
         this._altPressed = true;
+        TableSelectEventSender.sendModifierChange(this, event);
         break;
       }
 
@@ -383,47 +509,16 @@ export class TableSelect implements AbstractTableSelect {
       case this._options.keyDown: {
         if (!this._options.useKeyboard || !this._activeCell) break;
 
-        // Get next row and col according to current selection range.
-        const bounds = this.selectionBounds;
+        const cell = nextCellOn(
+          'down',
+          this._cells,
+          this._selection,
+          this._activeCell,
+          !this._contiguousPressed
+        ) as Cell;
 
-        const baseRow =
-          bounds.end.row > this._activeCell.row
-            ? bounds.end.row
-            : bounds.begin.row;
-
-        const baseCol =
-          bounds.end.col > this._activeCell.col
-            ? bounds.end.col
-            : bounds.begin.col;
-
-        const nextRow = Math.min(baseRow + 1, this._cells.length - 1);
-        const nextCol = baseCol;
-
-        const cell = this.cellAtPosition(nextRow, nextCol);
-        if (cell) {
-          if (!this._contiguousPressed) {
-            // Reset all selected cells.
-
-            this._resetSelection();
-
-            // Unset current active cell.
-
-            this._activeCell.setActive(false);
-            this._activeCell = undefined;
-
-            // Set active and selected.
-
-            this._activeCell = cell.setActive();
-            this._selection.add(cell.setSelected());
-          } else {
-            // Reset all selected cells.
-            this._resetSelection();
-
-            this.selectRange(this._activeCell, cell);
-          }
-        }
-
-        this.sendSelectEvent(event);
+        this._handleKeySelect(cell);
+        TableSelectEventSender.sendSelect(this, event);
 
         break;
       }
@@ -431,45 +526,16 @@ export class TableSelect implements AbstractTableSelect {
       case this._options.keyUp: {
         if (!this._options.useKeyboard || !this._activeCell) break;
 
-        // Get next row and col according to current selection range.
-        const bounds = this.selectionBounds;
+        const cell = nextCellOn(
+          'up',
+          this._cells,
+          this._selection,
+          this._activeCell,
+          !this._contiguousPressed
+        ) as Cell;
 
-        const baseRow =
-          bounds.begin.row < this._activeCell.row
-            ? bounds.begin.row
-            : bounds.end.row;
-
-        const baseCol =
-          bounds.end.col > this._activeCell.col
-            ? bounds.end.col
-            : bounds.begin.col;
-
-        const nextRow = Math.max(baseRow - 1, 0);
-        const nextCol = baseCol;
-
-        const cell = this.cellAtPosition(nextRow, nextCol);
-        if (cell) {
-          if (!this._contiguousPressed) {
-            // Reset all selected cells.
-            this._resetSelection();
-
-            // Unset current active cell.
-            this._activeCell.setActive(false);
-            this._activeCell = undefined;
-
-            // Set active and selected.
-
-            this._activeCell = cell.setActive();
-            this._selection.add(cell.setSelected());
-          } else {
-            // Reset all selected cells.
-            this._resetSelection();
-
-            this.selectRange(this._activeCell, cell);
-          }
-        }
-
-        this.sendSelectEvent(event);
+        this._handleKeySelect(cell);
+        TableSelectEventSender.sendSelect(this, event);
 
         break;
       }
@@ -477,47 +543,16 @@ export class TableSelect implements AbstractTableSelect {
       case this._options.keyLeft: {
         if (!this._options.useKeyboard || !this._activeCell) break;
 
-        // Get next row and col according to current selection range.
-        const bounds = this.selectionBounds;
+        const cell = nextCellOn(
+          'left',
+          this._cells,
+          this._selection,
+          this._activeCell,
+          !this._contiguousPressed
+        ) as Cell;
 
-        const baseRow =
-          bounds.end.row > this._activeCell.row
-            ? bounds.end.row
-            : bounds.begin.row;
-
-        const baseCol =
-          bounds.end.col > this._activeCell.col
-            ? bounds.end.col
-            : bounds.begin.col;
-
-        const nextRow = baseRow;
-        const nextCol = Math.max(baseCol - 1, 0);
-
-        const cell = this.cellAtPosition(nextRow, nextCol);
-        if (cell) {
-          if (!this._contiguousPressed) {
-            // Reset all selected cells.
-
-            this._resetSelection();
-
-            // Unset current active cell.
-
-            this._activeCell.setActive(false);
-            this._activeCell = undefined;
-
-            // Set active and selected.
-
-            this._activeCell = cell.setActive();
-            this._selection.add(cell.setSelected());
-          } else {
-            // Reset all selected cells.
-            this._resetSelection();
-
-            this.selectRange(this._activeCell, cell);
-          }
-        }
-
-        this.sendSelectEvent(event);
+        this._handleKeySelect(cell);
+        TableSelectEventSender.sendSelect(this, event);
 
         break;
       }
@@ -525,50 +560,16 @@ export class TableSelect implements AbstractTableSelect {
       case this._options.keyRight: {
         if (!this._options.useKeyboard || !this._activeCell) break;
 
-        // Get next row and col according to current selection range.
-        const bounds = this.selectionBounds;
+        const cell = nextCellOn(
+          'right',
+          this._cells,
+          this._selection,
+          this._activeCell,
+          !this._contiguousPressed
+        ) as Cell;
 
-        const baseRow =
-          bounds.end.row > this._activeCell.row
-            ? bounds.end.row
-            : bounds.begin.row;
-
-        const baseCol =
-          bounds.end.col > this._activeCell.col
-            ? bounds.end.col
-            : bounds.begin.col;
-
-        const nextRow = baseRow;
-        const nextCol = Math.min(
-          baseCol + 1,
-          this._cells[this._activeCell.row].length - 1
-        );
-
-        const cell = this.cellAtPosition(nextRow, nextCol);
-        if (cell) {
-          if (!this._contiguousPressed) {
-            // Reset all selected cells.
-
-            this._resetSelection();
-
-            // Unset current active cell.
-
-            this._activeCell.setActive(false);
-            this._activeCell = undefined;
-
-            // Set active and selected.
-
-            this._activeCell = cell.setActive();
-            this._selection.add(cell.setSelected());
-          } else {
-            // Reset all selected cells.
-            this._resetSelection();
-
-            this.selectRange(this._activeCell, cell);
-          }
-        }
-
-        this.sendSelectEvent(event);
+        this._handleKeySelect(cell);
+        TableSelectEventSender.sendSelect(this, event);
 
         break;
       }
@@ -576,6 +577,8 @@ export class TableSelect implements AbstractTableSelect {
   }
 
   private onKeyup(event: KeyboardEvent): void {
+    if (this._isLocked) return;
+
     if (!this._options.multiselection) return;
 
     switch (event.key) {
@@ -589,40 +592,14 @@ export class TableSelect implements AbstractTableSelect {
         break;
       }
     }
+
+    TableSelectEventSender.sendModifierChange(this, event);
   }
 
-  private sendSelectEvent(e: any): void {
-    // Get selected rows and columns indexes.
-
-    const selectedRows = Array.from(
-      new Set(Array.from(this.selection).map((cell: Cell) => cell.row))
-    );
-    const selectedCols = Array.from(
-      new Set(Array.from(this.selection).map((cell: Cell) => cell.col))
-    );
-
-    for (const cell of this.selection) {
-      selectedRows.push(cell.row);
-      selectedCols.push(cell.col);
-    }
-
-    // Compute coordinates of the selection / active cell (if alt modifier is pressed).
-    this._computeActiveCoords(this._altPressed);
-
-    const event = new CustomEvent('select', {
-      detail: {
-        // Original event.
-        event: e,
-        active: this._activeCell,
-        selection: this._selection,
-        bounds: this.selectionBounds,
-        coords: this._activeCoords,
-        selectedRows,
-        selectedCols,
-      },
-    });
-
-    this._element.dispatchEvent(event);
+  public resetModifiers(): void {
+    this._contiguousPressed = false;
+    this._altPressed = false;
+    TableSelectEventSender.sendModifierChange(this);
   }
 
   public set element(element: HTMLElement) {
@@ -728,5 +705,24 @@ export class TableSelect implements AbstractTableSelect {
 
   public get selection(): Set<Cell> {
     return this._selection;
+  }
+
+  public get selectionRect(): SelectionRect {
+    return this._rect;
+  }
+
+  public get activeCell(): AbstractCell | undefined {
+    return this._activeCell;
+  }
+
+  public get modifiersState(): TableSelectModifiersState {
+    return {
+      contiguous: this._contiguousPressed,
+      alt: this._altPressed,
+    };
+  }
+
+  public get isLocked(): boolean {
+    return this._isLocked;
   }
 }
