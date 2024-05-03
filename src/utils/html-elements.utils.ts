@@ -36,3 +36,27 @@ export const removeListener =
   (channel: string, listener: EventListener, options?: any) => {
     element.removeEventListener(channel, listener, options);
   };
+
+export const addListeners =
+  (element: Element) =>
+  (listeners: Record<string, { listener: EventListener; options?: any }>) => {
+    for (const channel in listeners) {
+      element.addEventListener(
+        channel,
+        listeners[channel].listener,
+        listeners[channel].options
+      );
+    }
+  };
+
+export const removeListeners =
+  (element: Element) =>
+  (listeners: Record<string, { listener: EventListener; options?: any }>) => {
+    for (const channel in listeners) {
+      element.removeEventListener(
+        channel,
+        listeners[channel].listener,
+        listeners[channel].options
+      );
+    }
+  };

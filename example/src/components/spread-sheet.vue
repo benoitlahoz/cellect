@@ -4,7 +4,15 @@ export default {
 };
 </script>
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, nextTick, unref } from 'vue';
+import {
+  ref,
+  onMounted,
+  onBeforeUnmount,
+  watch,
+  nextTick,
+  unref,
+  provide,
+} from 'vue';
 import type { Ref } from 'vue';
 import {
   getCSSStyle,
@@ -16,6 +24,9 @@ import {
 import { useTableSelect } from '../../../src/useTableSelect';
 import type { AbstractCell, CellBounds, CellRange } from '../../../src/types';
 import { TableSelectDataAttributes } from '../../../src/modules';
+
+import SelectionBounds from './selection-bounds.component.vue';
+import { TableSelectKey } from './injection-keys.types';
 
 const emit = defineEmits(['select']);
 
@@ -33,6 +44,16 @@ const edited = ref({
   row: -1,
   col: -1,
 });
+
+const tableSelect = useTableSelect(tableRef, data, {
+  rowSelector: 'row',
+  colSelector: 'col',
+  selectedSelector: 'selected',
+  activeSelector: 'active',
+  resetOnChange: false,
+  clearOnBlur: false,
+});
+provide(TableSelectKey, tableSelect);
 
 const {
   selection,
@@ -61,14 +82,7 @@ const {
   resetModifiers,
 
   computeActiveRect,
-} = useTableSelect(tableRef, data, {
-  rowSelector: 'row',
-  colSelector: 'col',
-  selectedSelector: 'selected',
-  activeSelector: 'active',
-  resetOnChange: false,
-  clearOnBlur: false,
-});
+} = tableSelect;
 
 const selectedData = ref();
 
@@ -284,12 +298,9 @@ const onResizeCol = (event: DragEvent, index: number) => {
   }
 };
 
-let srcSelection: CellBounds | undefined = undefined;
 let srcRange: CellRange | undefined = undefined;
 let dstRange: CellRange | undefined = undefined;
 const onMoveStart = (event: DragEvent) => {
-  srcSelection = unref(selectionBounds);
-
   if (selectionBounds.value) {
     srcRange = {
       index: {
@@ -322,7 +333,7 @@ const onMove = (event: any) => {
     const row = element.getAttribute(TableSelectDataAttributes.Row);
     const col = element.getAttribute(TableSelectDataAttributes.Col);
 
-    if (row && col && srcSelection) {
+    if (row && col && srcRange) {
       dstRange = {
         index: {
           row: parseInt(row),
@@ -533,7 +544,7 @@ const resizeTextarea = (
                   draggable="true",
                   @drag="onResizeCol($event, index - 1)"
                 )
-                
+
         .spreadsheet-table(
             ref="tableRef"
         )
@@ -562,6 +573,20 @@ const resizeTextarea = (
 
             .lasso-move(
               ref="lassoMoveRef"
+            )
+
+            selection-bounds(
+              v-if="selectionBounds && activeRect",
+              :table-select="tableSelect",
+
+              :rect="activeRect",
+              :bounds="selectionBounds"
+
+              selector="col",
+              :x="activeRect.pos.x",
+              :y="activeRect.pos.y",
+              :width="activeRect.size.width"
+              :height="activeRect.size.height",
             )
 
             .row(
