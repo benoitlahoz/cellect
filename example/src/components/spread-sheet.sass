@@ -9,7 +9,7 @@
 
     padding-bottom: var(--ts-scrollbar-padding)
     padding-right: var(--ts-scrollbar-padding)
-    background: cyan
+    background: white
 
     .spreadsheet-row-indexes
         display: flex
@@ -47,6 +47,7 @@
             height: var(--ts-row-height)
             background: var(--ts-row-header-color)
             border-bottom: var(--ts-border-size) solid var(--ts-row-header-border-color)
+            border-right: var(--ts-border-size) solid grey
             text-align: center
             min-width: 30px
             position: relative
@@ -141,9 +142,6 @@
                 padding: 0
                 margin: 0
                 border-right: var(--ts-border-size) solid grey
-
-                &:first-child
-                    border-left: var(--ts-border-size) solid grey
 
                 &:not(.active)
                     &.selected
