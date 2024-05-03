@@ -1,25 +1,51 @@
-import {
-  onBeforeUnmount,
-  onMounted,
-  nextTick,
-  watch,
-  ref,
-  reactive,
-  toRefs,
-  computed,
-  toRef,
-} from 'vue';
-import type { ReactiveEffect, Ref } from 'vue';
+import { onBeforeUnmount, onMounted, nextTick, watch, ref } from 'vue';
+import type { Ref } from 'vue';
 import { TableSelect } from './modules';
-import type { CellIndex, SelectionRect } from './types';
-import {
+import type {
   AbstractTableSelect,
   TableSelectOptions,
   AbstractCell,
   CellBounds,
+  CellIndex,
+  SelectionRect,
 } from './types';
 
-export const useTableSelect = (
+export interface UseTableSelectReturn {
+  selection: Ref<Set<AbstractCell>>;
+  activeCell: Ref<AbstractCell | undefined>;
+  selectionBounds: Ref<CellBounds | undefined>;
+  selectedRows: Ref<Array<number>>;
+  selectedCols: Ref<Array<number>>;
+  activeRect: Ref<SelectionRect>;
+  cellAtIndex: AbstractTableSelect['cellAtIndex'];
+  selectOne: AbstractTableSelect['selectOne'];
+  selectRow: AbstractTableSelect['selectRow'];
+  selectCol: AbstractTableSelect['selectCol'];
+  selectAll: AbstractTableSelect['selectAll'];
+  selectRangeByIndex: AbstractTableSelect['selectRangeByIndex'];
+  couldSelectRangeByIndex: AbstractTableSelect['couldSelectRangeByIndex'];
+  resetSelection: AbstractTableSelect['resetSelection'];
+
+  lockSelection: AbstractTableSelect['lock'];
+  unlockSelection: AbstractTableSelect['unlock'];
+  isLocked: Ref<AbstractTableSelect['isLocked']>;
+
+  contiguousModifier: Ref<boolean>;
+  altModifier: Ref<boolean>;
+  resetModifiers: AbstractTableSelect['resetModifiers'];
+
+  computeActiveRect: AbstractTableSelect['computeRect'];
+}
+
+export interface UseTableSelect {
+  (
+    element: Ref<HTMLElement | undefined>,
+    data: Ref<Array<Array<any>>>,
+    options: TableSelectOptions
+  ): UseTableSelectReturn;
+}
+
+export const useTableSelect: UseTableSelect = (
   // The container element.
   element: Ref<HTMLElement | undefined>,
   // An array of arrays.
@@ -35,7 +61,7 @@ export const useTableSelect = (
   /**
    * The `TableSelect` current selection made reactive.
    */
-  const selection: Ref<Set<any>> = ref(new Set());
+  const selection: Ref<Set<AbstractCell>> = ref(new Set());
 
   /**
    * The current active cell made reactive.
