@@ -140,7 +140,7 @@ export abstract class AbstractTableSelect {
    *
    * @returns { SelectionRect } The coordinates in pixels of the active selection.
    */
-  public abstract computeRect(activeOnly: boolean): SelectionRect;
+  public abstract computeRect(activeOnly?: boolean): SelectionRect;
 
   /**
    * Cleans the instance, its selection and its elements' event listeners.
@@ -179,9 +179,9 @@ export abstract class AbstractTableSelect {
   public abstract selectOne(
     row: number,
     col: number,
-    resetSelection: boolean,
-    onlyActiveRect: boolean,
-    active: boolean
+    resetSelection?: boolean,
+    onlyActiveRect?: boolean,
+    active?: boolean
   ): void;
 
   public abstract selectRangeByIndex(
