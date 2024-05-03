@@ -11,7 +11,7 @@ import {
 } from 'vue';
 import type { ReactiveEffect, Ref } from 'vue';
 import { TableSelect } from './modules';
-import type { SelectionRect } from './types';
+import type { CellIndex, SelectionRect } from './types';
 import {
   AbstractTableSelect,
   TableSelectOptions,
@@ -118,6 +118,13 @@ export const useTableSelect = (
     altModifier.value = event.detail.altModifier;
   };
 
+  const cellAtIndex = (row: number, col: number): AbstractCell | undefined => {
+    if (tableSelect) {
+      return tableSelect.cellAtIndex(row, col);
+    }
+    return;
+  };
+
   const selectOne = (
     row: number,
     col: number,
@@ -152,9 +159,29 @@ export const useTableSelect = (
     }
   };
 
-  const resetSelection = () => {
+  const selectRangeByIndex = (
+    begin: CellIndex,
+    end: CellIndex,
+    send = true
+  ): void => {
     if (tableSelect) {
-      tableSelect.resetSelection();
+      tableSelect.selectRangeByIndex(begin, end, send);
+    }
+  };
+
+  const couldSelectRangeByIndex = (
+    begin: CellIndex,
+    end: CellIndex
+  ): Set<AbstractCell> => {
+    if (!tableSelect) {
+      throw new Error('TableSelect is not instantiated yet.');
+    }
+    return tableSelect.couldSelectRangeByIndex(begin, end);
+  };
+
+  const resetSelection = (send = true) => {
+    if (tableSelect) {
+      tableSelect.resetSelection(send);
     }
   };
 
@@ -187,7 +214,7 @@ export const useTableSelect = (
   };
 
   /**
-   * Watch for data once the `TableSelect` is created.
+   * Watch for data change.
    */
   const enableDataWatcher = () => {
     watch(
@@ -200,8 +227,8 @@ export const useTableSelect = (
         });
       },
       {
-        immediate: true,
-        deep: false,
+        immediate: false,
+        deep: options.resetOnChange,
       }
     );
   };
@@ -214,10 +241,14 @@ export const useTableSelect = (
     selectedCols,
     activeRect,
 
+    cellAtIndex,
+
     selectOne,
     selectRow,
     selectCol,
     selectAll,
+    selectRangeByIndex,
+    couldSelectRangeByIndex,
     resetSelection,
 
     lockSelection,
