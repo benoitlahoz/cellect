@@ -184,8 +184,23 @@ export abstract class AbstractTableSelect {
     active: boolean
   ): void;
 
-  public abstract selectRangeByIndex(begin: CellIndex, end: CellIndex): void;
-  public abstract unselectRangeByIndex(begin: CellIndex, end: CellIndex): void;
+  public abstract selectRangeByIndex(
+    begin: CellIndex,
+    end: CellIndex,
+    send?: boolean
+  ): void;
+
+  public abstract couldSelectRangeByIndex(
+    begin: CellIndex,
+    end: CellIndex
+  ): Set<AbstractCell>;
+
+  public abstract unselectRangeByIndex(
+    begin: CellIndex,
+    end: CellIndex,
+    send?: boolean
+  ): void;
+
   public abstract modifiersState: TableSelectModifiersState;
 
   /**
@@ -222,6 +237,12 @@ export abstract class AbstractTableSelect {
     unselect?: boolean
   ): void;
 
+  public abstract couldSelectRange(
+    begin: AbstractCell,
+    end: AbstractCell,
+    unselect?: boolean
+  ): Set<AbstractCell>;
+
   /**
    * Select all cells.
    *
@@ -231,8 +252,10 @@ export abstract class AbstractTableSelect {
 
   /**
    * Unselect all cells.
+   *
+   * @param { boolean } send Send a 'select' event.
    */
-  public abstract resetSelection(): void;
+  public abstract resetSelection(send?: boolean): void;
 
   /**
    * Get a `Cell` at given indexes (row, column).

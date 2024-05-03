@@ -1,4 +1,4 @@
-import { addClass, removeClass } from '../functions';
+import { addClass, removeClass } from '../utils';
 import {
   AbstractCell,
   CellBounds,

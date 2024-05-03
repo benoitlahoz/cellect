@@ -13,7 +13,7 @@ import {
   nextCellOn,
   selectRange,
   selectAll,
-} from '../utils';
+} from '../handlers/table-select.handlers';
 import { SelectionLasso } from './lasso.module';
 import { TableSelectEventSender } from './table-select-event.module';
 
@@ -206,7 +206,14 @@ export class TableSelect implements AbstractTableSelect {
   }
 
   public selectRange(begin: Cell, end: Cell, unselect = false) {
-    this._selection = selectRange(
+    this._selection = this.couldSelectRange(begin, end, unselect);
+    this._selection.forEach((cell: AbstractCell) =>
+      cell.setSelected(!unselect)
+    );
+  }
+
+  public couldSelectRange(begin: Cell, end: Cell, unselect = false) {
+    return selectRange(
       this._cells,
       this._selection,
       begin,
@@ -231,11 +238,23 @@ export class TableSelect implements AbstractTableSelect {
         endCell,
         false
       ) as Set<Cell>;
+      this._selection.forEach((cell: AbstractCell) => cell.setSelected(true));
     }
 
     if (send) {
       TableSelectEventSender.sendSelect(this);
     }
+  }
+
+  public couldSelectRangeByIndex(begin: CellIndex, end: CellIndex): Set<Cell> {
+    const beginCell = cellAtIndex(this._cells, begin.row, begin.col) as Cell;
+    const endCell = cellAtIndex(this._cells, end.row, end.col) as Cell;
+
+    if (beginCell && endCell) {
+      return this.couldSelectRange(beginCell, endCell);
+    }
+
+    return new Set();
   }
 
   public unselectRangeByIndex(
@@ -356,9 +375,12 @@ export class TableSelect implements AbstractTableSelect {
     this._selection.clear();
   }
 
-  public resetSelection(): void {
+  public resetSelection(send = true): void {
     this._resetSelection();
-    TableSelectEventSender.sendSelect(this);
+
+    if (send) {
+      TableSelectEventSender.sendSelect(this);
+    }
   }
 
   private _setActive(cell: Cell, resetSelection = false): void {
