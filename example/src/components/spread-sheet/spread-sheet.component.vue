@@ -1,6 +1,6 @@
 <script lang="ts">
 export default {
-  name: 'SpreadSheetUse',
+  name: 'SpreadSheet',
 };
 </script>
 <script setup lang="ts">
@@ -10,23 +10,21 @@ import {
   onBeforeUnmount,
   watch,
   nextTick,
-  unref,
   provide,
+  inject,
+  toRaw,
 } from 'vue';
 import type { Ref } from 'vue';
-import {
-  getCSSStyle,
-  getPixelsForCSS,
-  getLinesForCSSUnitProp,
-  setCSSStyle,
-  numberToSpreadsheetColumn,
-} from '../../../src/utils';
-import { useTableSelect } from '../../../src/useTableSelect';
-import type { AbstractCell, CellBounds, CellRange } from '../../../src/types';
-import { TableSelectDataAttributes } from '../../../src/modules';
+import { numberToSpreadsheetColumn } from './spread-sheet.utils';
+import { useTableSelect, TableSelectKey } from '../../../../src/useTableSelect';
+import type { AbstractCell } from 'cell-collection';
 
-import SelectionBounds from './selection-bounds.component.vue';
-import { TableSelectKey } from './injection-keys.types';
+import type { UseStyle } from '../../use/useStyle';
+import { UseStyleKey } from '../../injection-keys.types';
+
+import { useSelectionMove } from '../../use/useSelectionMove';
+
+import SpreadSheetItem from './spread-sheet-item.component.vue';
 
 const emit = defineEmits(['select']);
 
@@ -34,10 +32,7 @@ const data: Ref<Array<Array<any>>> = ref([]);
 const tableRef: Ref<HTMLElement | undefined> = ref();
 const lassoRef: Ref<HTMLElement | undefined> = ref();
 const lassoMoveRef: Ref<HTMLElement | undefined> = ref();
-const textareaRef: Ref<HTMLTextAreaElement | undefined> = ref();
 
-let styleElement: HTMLStyleElement;
-const border: Ref<string> = ref('');
 const lassoBorder: Ref<string> = ref('');
 
 const edited = ref({
@@ -45,11 +40,18 @@ const edited = ref({
   col: -1,
 });
 
-const tableSelect = useTableSelect(tableRef, data, {
+const useStyle = inject<UseStyle>(UseStyleKey);
+if (!useStyle) {
+  throw new Error(`Could not resolve ${UseStyleKey.description}`);
+}
+
+const { setCSSStyle, getCSSStyle } = useStyle();
+
+const tableSelect = useTableSelect(tableRef, {
   rowSelector: 'row',
   colSelector: 'col',
   selectedSelector: 'selected',
-  activeSelector: 'active',
+  focusSelector: 'focused',
   resetOnChange: false,
   clearOnBlur: false,
 });
@@ -57,43 +59,33 @@ provide(TableSelectKey, tableSelect);
 
 const {
   selection,
-  activeCell,
+  focused,
   selectionBounds,
   selectedRows,
   selectedCols,
-  activeRect,
-
-  cellAtIndex,
-
+  focusedRect,
   selectOne,
   selectRow,
   selectCol,
   selectAll,
-  selectRangeByIndex,
-  couldSelectRangeByIndex,
-  resetSelection,
-
-  isLocked,
   lockSelection,
   unlockSelection,
-
-  contiguousModifier,
-  altModifier,
   resetModifiers,
-
-  computeActiveRect,
+  computeFocusedRect,
 } = tableSelect;
+
+const { onMoveStart } = useSelectionMove(tableSelect, data, lassoMoveRef);
 
 const selectedData = ref();
 
 watch(
   () => [
     selection.value,
-    activeCell.value,
+    focused.value,
     selectionBounds.value,
     selectedRows.value,
     selectedCols.value,
-    activeRect.value,
+    focusedRect.value,
   ],
   () => {
     nextTick(() => {
@@ -107,18 +99,19 @@ watch(
       )
       .map((cell: AbstractCell) => {
         return {
-          cell,
+          row: cell.row,
+          col: cell.col,
           data: data.value[cell.row][cell.col],
         };
       });
 
     emit('select', {
       data: selectedData.value,
-      rows: selectedRows.value,
-      cols: selectedCols.value,
+      rows: toRaw(selectedRows.value),
+      cols: toRaw(selectedCols.value),
     });
   },
-  { immediate: true, deep: true }
+  { immediate: false, deep: true }
 );
 
 onMounted(() => {
@@ -130,8 +123,6 @@ onMounted(() => {
     data.value.push(cols);
   }
 
-  mountStyle();
-
   const timeout = setTimeout(() => {
     selectOne(0, 0);
 
@@ -140,7 +131,6 @@ onMounted(() => {
     }
 
     // Placed here because of Firefox time to load.
-    border.value = getCSSStyle(document.body, '--ts-border-size');
     lassoBorder.value = getCSSStyle(document.body, '--ts-lasso-border-size');
 
     clearTimeout(timeout);
@@ -148,24 +138,19 @@ onMounted(() => {
 });
 
 const handleLasso = () => {
-  const rect = activeRect.value;
+  const rect = focusedRect.value;
 
   if (lassoRef.value) {
-    if (selection.value.size > 0) {
+    if (selection.value.length > 0) {
       lassoRef.value.style.display = '';
       lassoRef.value.style.left = `${rect.pos.x}px`;
       lassoRef.value.style.top = `${rect.pos.y}px`;
-      lassoRef.value.style.width = `calc(${rect.size.width}px - ${border.value} - ${lassoBorder.value})`;
+      lassoRef.value.style.width = `calc(${rect.size.width}px - ${lassoBorder.value})`;
       lassoRef.value.style.height = `calc(${rect.size.height}px - ${lassoBorder.value})`;
     } else {
       lassoRef.value.style.display = 'none';
     }
   }
-};
-
-const mountStyle = () => {
-  styleElement = document.createElement('style');
-  document.head.appendChild(styleElement);
 };
 
 onBeforeUnmount(() => {
@@ -189,22 +174,20 @@ const onClickRow = (event: PointerEvent, row: number) => {
     : event.ctrlKey;
 
   if ((shift && cmdOrControl) || (!shift && !cmdOrControl)) {
-    // Replace selection adn set active cell at the beginning of the row.
+    // Replace selection and set focused cell at the beginning of the row.
     selectRow(row, true, true);
   } else if (cmdOrControl && !shift) {
-    // Add to selection and move active cell.
+    // Add to selection and move focused cell.
     selectRow(row, true, false);
   } else {
     // Shift is pressed.
 
-    if (activeCell.value) {
-      const activeRow = activeCell.value.row;
+    if (focused.value) {
+      const activeRow = focused.value.row;
 
       // const existingRange =
       const begin = row > activeRow ? activeRow + 1 : row;
       const end = row < activeRow ? activeRow - 1 : row;
-
-      console.log(row, activeCell.value.row, begin, end, selectedRows.value);
 
       for (let i = begin; i <= end; i++) {
         selectRow(i, false, false);
@@ -237,9 +220,9 @@ const onClickCol = (event: PointerEvent, col: number) => {
   } else {
     // Shift is pressed.
 
-    if (activeCell.value) {
-      const begin = col > activeCell.value.col ? activeCell.value.col : col;
-      const end = col < activeCell.value.col ? activeCell.value.col : col;
+    if (focused.value) {
+      const begin = col > focused.value.col ? focused.value.col : col;
+      const end = col < focused.value.col ? focused.value.col : col;
 
       for (let i = begin; i <= end; i++) {
         selectCol(i, false);
@@ -265,13 +248,12 @@ const onResizeRow = (event: DragEvent, index: number) => {
   const parent = (event.target as HTMLElement).parentElement;
 
   setCSSStyle(
-    styleElement.sheet!,
     `.row-${index}`,
     'min-height',
     `${parent!.offsetHeight + event.offsetY}px`
   );
 
-  computeActiveRect();
+  computeFocusedRect();
 
   if (tableRef.value) {
     tableRef.value.focus();
@@ -285,133 +267,29 @@ const onResizeCol = (event: DragEvent, index: number) => {
   const parent = (event.target as HTMLElement).parentElement;
 
   setCSSStyle(
-    styleElement.sheet!,
     `.col-${index}`,
     'min-width',
     `${parent!.offsetWidth + event.offsetX}px`
   );
 
-  computeActiveRect();
+  computeFocusedRect();
 
   if (tableRef.value) {
     tableRef.value.focus();
   }
 };
 
-let srcRange: CellRange | undefined = undefined;
-let dstRange: CellRange | undefined = undefined;
-const onMoveStart = (event: DragEvent) => {
-  if (selectionBounds.value) {
-    srcRange = {
-      index: {
-        row: selectionBounds.value.begin.row,
-        col: selectionBounds.value.begin.col,
-      },
-      size: {
-        width:
-          selectionBounds.value.end.col - selectionBounds.value.begin.col + 1,
-        height:
-          selectionBounds.value.end.row - selectionBounds.value.begin.row + 1,
-      },
-    };
+const onEnter = (event: KeyboardEvent) => {
+  event.preventDefault();
+  const cell = focused.value;
 
+  if (cell && (edited.value.row === -1 || edited.value.col === -1)) {
+    edited.value.row = cell.row;
+    edited.value.col = cell.col;
+
+    resetModifiers();
     lockSelection();
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onWindowUp);
   }
-};
-
-const onMove = (event: any) => {
-  const element = document
-    .elementsFromPoint(event.x, event.y)
-    .find((element: Element) =>
-      element.classList.contains('col')
-    ) as HTMLElement;
-
-  if (element) {
-    const row = element.getAttribute(TableSelectDataAttributes.Row);
-    const col = element.getAttribute(TableSelectDataAttributes.Col);
-
-    if (row && col && srcRange) {
-      dstRange = {
-        index: {
-          row: parseInt(row),
-          col: parseInt(col),
-        },
-        size: srcRange!.size,
-      };
-
-      const endCell = cellAtIndex(
-        parseInt(row) + srcRange!.size.height - 1,
-        parseInt(col) + srcRange!.size.width - 1
-      );
-      const endElement = endCell!.element;
-
-      // console.log(row, col);
-
-      const rect = {
-        pos: {
-          x: element.offsetLeft,
-          y: element.offsetTop,
-        },
-        size: {
-          width:
-            endElement.offsetLeft + endElement.offsetWidth - element.offsetLeft,
-          height:
-            endElement.offsetTop + endElement.offsetHeight - element.offsetTop,
-        },
-      };
-
-      if (lassoMoveRef.value) {
-        lassoMoveRef.value.style.display = '';
-        lassoMoveRef.value.style.left = `${rect.pos.x}px`;
-        lassoMoveRef.value.style.top = `${rect.pos.y}px`;
-        lassoMoveRef.value.style.width = `calc(${rect.size.width}px - ${border.value} - ${lassoBorder.value})`;
-        lassoMoveRef.value.style.height = `calc(${rect.size.height}px - ${lassoBorder.value})`;
-      }
-
-      // resetSelection(false);
-      // console.log(couldSelectRangeByIndex(newBounds.begin, newBounds.end));
-    }
-  }
-};
-
-const onWindowUp = () => {
-  window.removeEventListener('pointermove', onMove);
-  window.removeEventListener('pointerup', onWindowUp);
-  unlockSelection();
-
-  if (srcRange && dstRange) {
-    for (let row = 0; row < srcRange.size.height; row++) {
-      for (let col = 0; col < srcRange.size.width; col++) {
-        const srcData =
-          data.value[srcRange.index.row + row][srcRange.index.col + col];
-
-        data.value[dstRange.index.row + row][dstRange.index.col + col] =
-          srcData;
-        data.value[srcRange.index.row + row][srcRange.index.col + col] =
-          undefined;
-      }
-    }
-
-    resetSelection(false);
-    selectRangeByIndex(
-      {
-        row: dstRange.index.row,
-        col: dstRange.index.col,
-      },
-      {
-        row: dstRange.index.row + dstRange.size.height - 1,
-        col: dstRange.index.col + dstRange.size.width - 1,
-      },
-      true
-    );
-
-    // TODO: set active
-  }
-
-  if (lassoMoveRef.value) lassoMoveRef.value.style.display = 'none';
 };
 
 /**
@@ -419,93 +297,44 @@ const onWindowUp = () => {
  */
 
 const onDoubleClick = (event: PointerEvent, row: number, col: number) => {
+  event.preventDefault();
   edited.value.row = row;
   edited.value.col = col;
-
-  nextTick(() => {
-    if (textareaRef.value) {
-      resetModifiers();
-      lockSelection();
-
-      // WARNING: the element ref is transformed by Vue into an array (because of its 'v-if').
-      const textarea = (
-        textareaRef.value as unknown as Array<HTMLTextAreaElement>
-      )[0];
-      textarea.readOnly = false;
-      textarea.focus();
-    }
-  });
 };
 
-const onInput = (event: InputEvent, row: number, col: number) => {
-  const target = event.target as HTMLTextAreaElement;
-  const value = target.value;
-
+const onItemChange = (row: number, col: number, value: any) => {
   data.value[row][col] = value;
-
-  resizeTextarea(target, row, col);
+  computeFocusedRect();
 };
 
-const onBlur = (event: Event, row: number, col: number) => {
-  const target = event.target as HTMLTextAreaElement;
-  target.readOnly = true;
-
-  edited.value.row = -1;
-  edited.value.col = -1;
+const onItemBlur = (row: number, col: number, value: any) => {
+  data.value[row][col] = value;
 
   if (tableRef.value) {
     unlockSelection();
     tableRef.value.focus();
+
+    // Select the next cell (like in Microsoft Excel).
+    // TODO: pass to next col if in a selection range.
+    selectOne(
+      // Next row.
+      Math.min(row + 1, data.value.length),
+      // This column.
+      col,
+      // Reset selection only if it was one cell.
+      selection.value.length === 1,
+      // Compute coordinates of the selection + active cell if alt modifier is pressed or selection is wide.
+      selection.value.length > 1,
+      // Focus on the newly selected cell.
+      true
+    );
+
+    const timeout = setTimeout(() => {
+      clearTimeout(timeout);
+      edited.value.row = -1;
+      edited.value.col = -1;
+    }, 10);
   }
-};
-
-const onEnter = (event: KeyboardEvent, row: number, col: number) => {
-  const target = event.target as HTMLTextAreaElement;
-
-  if (!event.altKey) {
-    const row = edited.value.row;
-    const col = edited.value.col;
-
-    target.blur();
-
-    edited.value.row = -1;
-    edited.value.col = -1;
-
-    if (tableRef.value) {
-      unlockSelection();
-      tableRef.value.focus();
-
-      // Select the next cell (like in Microsoft Excel).
-      selectOne(
-        Math.min(row + 1, data.value.length),
-        col,
-        selection.value.size === 1,
-        selection.value.size > 1,
-        true
-      );
-    }
-
-    return;
-  }
-
-  target.value = `${target.value}\r\n`;
-  resizeTextarea(target, row, col);
-};
-
-const resizeTextarea = (
-  target: HTMLTextAreaElement,
-  row: number,
-  col: number
-) => {
-  const lineHeigth = getPixelsForCSS(target, '--ts-row-height');
-  const lines = getLinesForCSSUnitProp(target, '--ts-row-height');
-
-  target.rows = lines;
-  target.style.height = `${lineHeigth * lines}px`;
-
-  setCSSStyle(styleElement.sheet!, `.row-${row}`, 'min-height', `${lines}lh`);
-
-  computeActiveRect();
 };
 </script>
 <template lang="pug">
@@ -537,7 +366,7 @@ const resizeTextarea = (
                 v-for="index in (data[0].length)",
                 :class="`col-${index-1}`, {'selected': selectedCols.includes(index - 1)}",
 
-                @mousedown="onClickCol($event, index - 1)"
+                @mousedown="onClickCol($event, index - 1)",
             ) 
                 .index {{ numberToSpreadsheetColumn(index - 1) }}
                 .resize-handle(
@@ -546,7 +375,8 @@ const resizeTextarea = (
                 )
 
         .spreadsheet-table(
-            ref="tableRef"
+            ref="tableRef",
+            @keydown.enter="onEnter"
         )
             .lasso(
               ref="lassoRef",
@@ -572,22 +402,11 @@ const resizeTextarea = (
               .lasso-extend-handle
 
             .lasso-move(
-              ref="lassoMoveRef"
+              ref="lassoMoveRef",
+              style="display: none"
             )
-
-            selection-bounds(
-              v-if="selectionBounds && activeRect",
-              :table-select="tableSelect",
-
-              :rect="activeRect",
-              :bounds="selectionBounds"
-
-              selector="col",
-              :x="activeRect.pos.x",
-              :y="activeRect.pos.y",
-              :width="activeRect.size.width"
-              :height="activeRect.size.height",
-            )
+            
+            // selectionBounds
 
             .row(
                 v-for="(row, rowIndex) in data",
@@ -599,25 +418,22 @@ const resizeTextarea = (
                     v-for="(col, colIndex) in row",
                     :key="`${rowIndex}-${colIndex}`",
                     :id="`col-${rowIndex}-${colIndex}`",
-                    :class="`col-${colIndex}`"
+                    :class="`col-${colIndex}`",
+
+                    tabindex="-1",
 
                     @dblclick="onDoubleClick($event, rowIndex, colIndex)",
                 )
-                    textarea( 
-                      v-if="edited.row === rowIndex && edited.col === colIndex",
+                    spread-sheet-item(
+                      :row="rowIndex",
+                      :col="colIndex",
+                      :value="col",
+                      :editing="edited.row === rowIndex && edited.col === colIndex",
 
-                      ref="textareaRef",
-
-                      :value="col", 
-                      :readonly="true", 
-                      @input="onInput($event, rowIndex,colIndex)", 
-                      @keydown.enter="onEnter($event, rowIndex, colIndex)", 
-                      @blur="onBlur($event, rowIndex, colIndex)" 
+                      @input="onItemChange",
+                      @blur="onItemBlur",
                     )
-                    .spreadsheet-cell-value(
-                      v-else,
-                      :innerText="col"
-                    ) 
+                    
 </template>
 <style lang="sass">
 @use "./spread-sheet"
@@ -631,10 +447,10 @@ const resizeTextarea = (
 
     .lasso-extend-handle
       position: absolute
-      right: calc(var(--ts-lasso-handles-size) * -0.5)
-      bottom: calc(var(--ts-lasso-handles-size) * -0.5)
-      width: var(--ts-lasso-handles-size)
-      height: var(--ts-lasso-handles-size)
+      right: calc(var(--ts-lasso-handles-size) * -1)
+      bottom: calc(var(--ts-lasso-handles-size) * -1)
+      width: calc(var(--ts-lasso-handles-size) * 2)
+      height: calc(var(--ts-lasso-handles-size) * 2)
       background: var(--ts-lasso-extend-handle-color)
       pointer-events: all
 
@@ -681,3 +497,7 @@ const resizeTextarea = (
     border: var(--ts-lasso-border-size) solid red
     pointer-events: none
 </style>
+/* selection-bounds( v-if="selectionBounds && focusedRect",
+:table-select="tableSelect", :rect="focusedRect", :bounds="selectionBounds"
+selector="col", :x="focusedRect.pos.x", :y="focusedRect.pos.y",
+:width="focusedRect.size.width" :height="focusedRect.size.height", ) */

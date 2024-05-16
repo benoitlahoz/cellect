@@ -1,4 +1,4 @@
-@import "../design/main"
+@import "../../design/main"
 
 .spreadsheet-table-container
     display: flex
@@ -137,17 +137,18 @@
                     border-top: var(--ts-border-size) solid grey
 
             .col
+                outline: none
                 width: var(--ts-col-width)
                 height: 100%
                 padding: 0
                 margin: 0
                 border-right: var(--ts-border-size) solid grey
 
-                &:not(.active)
+                &:not(.focused)
                     &.selected
                         background: var(--ts-selected-cell-color)
 
-                &.active
+                &.focused
                     background: var(--ts-active-cell-color)
 
                 textarea

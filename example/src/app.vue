@@ -1,23 +1,55 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import SpreadSheet from './components/spread-sheet.vue';
+import { provide, ref } from 'vue';
+import type { Ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useStyle } from './use/useStyle';
+import { UseStyleKey } from './injection-keys.types';
 
-const selected = ref([]);
+const router = useRouter();
+
+const styleElement: HTMLStyleElement = document.createElement('style');
+document.head.appendChild(styleElement);
+
+provide(UseStyleKey, useStyle);
+
+const selected: Ref<Array<any>> = ref([]);
 const onSpreadsheetSelect = (event: any) => {
   selected.value = event.data;
 };
 </script>
 <template lang="pug">
-spread-sheet(
-    @select="onSpreadsheetSelect"
+.toolbar 
+    button(
+        @click="router.push('/example')"
+    ) Spreadsheet
+    button(
+        @click="router.push('/example/users')"
+    ) Users List
+
+
+router-view(
+    to="/",
+    v-slot="{ Component }"
 )
+    keep-alive
+        component(
+            :is="Component",
+            @select="onSpreadsheetSelect",
+        )
+
 div(style="display: flex") 
     div(
         v-for="selection in selected",
+        :key="`${selection.row}-${selection.col}`",
         style="margin: 1rem"
     )
-        pre {{ selection.cell.row }}-{{ selection.cell.col }}: {{ selection.data }}
+        pre {{ selection.row }}-{{ selection.col }}: {{ selection.data }}
 </template>
-/* textarea( :value="col", :readonly="true", @input="onInput($event, rowIndex,
-colIndex)", @keydown.enter="onEnter($event, rowIndex, colIndex)",
-@blur="onBlur($event, rowIndex, colIndex)" ) */
+<style lang="sass">
+.toolbar
+    display: flex
+    padding: 0.5rem
+
+    button
+        margin-right: 0.5rem
+</style>

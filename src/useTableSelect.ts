@@ -1,30 +1,36 @@
-import { onBeforeUnmount, onMounted, nextTick, watch, ref } from 'vue';
-import type { Ref } from 'vue';
+import { onBeforeUnmount, onMounted, nextTick, ref, watch } from 'vue';
+import type { InjectionKey, Ref } from 'vue';
 import { TableSelect } from './modules';
 import type {
   AbstractTableSelect,
   TableSelectOptions,
-  AbstractCell,
-  CellBounds,
-  CellIndex,
   SelectionRect,
 } from './types';
+import { CellCollection } from 'cell-collection';
+import type {
+  AbstractCell,
+  AbstractCellCollection,
+  CellBounds,
+  CellIndex,
+  CellRange,
+  CellSize,
+} from 'cell-collection';
+import { TableSelectEventSender } from './modules/table-select-event.module';
 
 export interface UseTableSelectReturn {
-  selection: Ref<Set<AbstractCell>>;
-  activeCell: Ref<AbstractCell | undefined>;
+  selection: Ref<CellCollection>;
+  focused: Ref<AbstractCell | undefined>;
   selectionBounds: Ref<CellBounds | undefined>;
   selectedRows: Ref<Array<number>>;
   selectedCols: Ref<Array<number>>;
-  activeRect: Ref<SelectionRect>;
-  cellAtIndex: AbstractTableSelect['cellAtIndex'];
+  focusedRect: Ref<SelectionRect>;
+  cellAtIndex: AbstractTableSelect['at'];
   selectOne: AbstractTableSelect['selectOne'];
+  selectRange: AbstractTableSelect['selectRange'];
   selectRow: AbstractTableSelect['selectRow'];
   selectCol: AbstractTableSelect['selectCol'];
   selectAll: AbstractTableSelect['selectAll'];
-  selectRangeByIndex: AbstractTableSelect['selectRangeByIndex'];
-  couldSelectRangeByIndex: AbstractTableSelect['couldSelectRangeByIndex'];
-  resetSelection: AbstractTableSelect['resetSelection'];
+  unselect: AbstractTableSelect['unselect'];
 
   lockSelection: AbstractTableSelect['lock'];
   unlockSelection: AbstractTableSelect['unlock'];
@@ -34,24 +40,26 @@ export interface UseTableSelectReturn {
   altModifier: Ref<boolean>;
   resetModifiers: AbstractTableSelect['resetModifiers'];
 
-  computeActiveRect: AbstractTableSelect['computeRect'];
+  computeFocusedRect: AbstractTableSelect['computeRect'];
 }
 
 export interface UseTableSelect {
   (
     element: Ref<HTMLElement | undefined>,
-    data: Ref<Array<Array<any>>>,
-    options: TableSelectOptions
+    options: TableSelectOptions,
+    data?: Ref<any> | undefined
   ): UseTableSelectReturn;
 }
+
+export const TableSelectKey: InjectionKey<UseTableSelectReturn> =
+  Symbol('useTableSelect');
 
 export const useTableSelect: UseTableSelect = (
   // The container element.
   element: Ref<HTMLElement | undefined>,
-  // An array of arrays.
-  data: Ref<Array<Array<any>>>,
   // Options for the table selector.
-  options: TableSelectOptions
+  options: TableSelectOptions,
+  data?: Ref<any>
 ) => {
   /**
    * The `TableSelect` instance.
@@ -61,12 +69,14 @@ export const useTableSelect: UseTableSelect = (
   /**
    * The `TableSelect` current selection made reactive.
    */
-  const selection: Ref<Set<AbstractCell>> = ref(new Set());
+  const selection: Ref<CellCollection> = ref(
+    new CellCollection()
+  ) as Ref<CellCollection>;
 
   /**
-   * The current active cell made reactive.
+   * The current focused cell made reactive.
    */
-  const activeCell: Ref<AbstractCell | undefined> = ref();
+  const focused: Ref<AbstractCell | undefined> = ref();
 
   /**
    * The current selection bounds made reactive.
@@ -86,7 +96,7 @@ export const useTableSelect: UseTableSelect = (
   /**
    * The current selection coordinates made reactive.
    */
-  const activeRect: Ref<SelectionRect> = ref({
+  const focusedRect: Ref<SelectionRect> = ref({
     pos: { x: 0, y: 0 },
     size: { width: 0, height: 0 },
   });
@@ -109,11 +119,20 @@ export const useTableSelect: UseTableSelect = (
     if (element.value) {
       nextTick(() => {
         if (element.value) {
-          tableSelect = new TableSelect(element.value, data.value, options);
+          tableSelect = new TableSelect(element.value, options);
           element.value.addEventListener('select', onSelect as any);
           element.value.addEventListener('modifier-change', onModifier as any);
 
-          enableDataWatcher();
+          if (data) {
+            watch(
+              () => data,
+              () => {
+                // Recompute cells on data change.
+                tableSelect.element = element.value!;
+              },
+              { deep: true }
+            );
+          }
         }
       });
     }
@@ -132,11 +151,11 @@ export const useTableSelect: UseTableSelect = (
 
   const onSelect = (event: CustomEvent) => {
     selection.value = event.detail.selection;
-    activeCell.value = event.detail.active;
+    focused.value = event.detail.focused;
     selectionBounds.value = event.detail.bounds;
     selectedRows.value = event.detail.selectedRows;
     selectedCols.value = event.detail.selectedCols;
-    activeRect.value = event.detail.rect;
+    focusedRect.value = event.detail.rect;
   };
 
   const onModifier = (event: CustomEvent) => {
@@ -145,10 +164,7 @@ export const useTableSelect: UseTableSelect = (
   };
 
   const cellAtIndex = (row: number, col: number): AbstractCell | undefined => {
-    if (tableSelect) {
-      return tableSelect.cellAtIndex(row, col);
-    }
-    return;
+    return tableSelect.at(row, col);
   };
 
   const selectOne = (
@@ -163,119 +179,75 @@ export const useTableSelect: UseTableSelect = (
     }
   };
 
+  const selectRange = (
+    ...args: (CellRange | CellBounds | AbstractCell | CellIndex | CellSize)[]
+  ): CellCollection => {
+    const selection = tableSelect.selectRange(...args) as CellCollection;
+
+    // We trigger event from here, as it will not be triggered by the TableSelect.
+    TableSelectEventSender.sendSelect(tableSelect);
+    return selection;
+  };
+
   const selectRow = (
     row: number,
     moveActive = true,
     resetSelection = true
   ): void => {
-    if (tableSelect) {
-      tableSelect.selectRow(row, moveActive, resetSelection);
-    }
+    tableSelect.selectRow(row, moveActive, resetSelection);
   };
 
   const selectCol = (col: number, resetSelection = true): void => {
-    if (tableSelect) {
-      tableSelect.selectCol(col, resetSelection);
-    }
+    tableSelect.selectCol(col, resetSelection);
   };
 
   const selectAll = (activeAtFirst = false) => {
-    if (tableSelect) {
-      tableSelect.selectAll(activeAtFirst);
-    }
+    tableSelect.selectAll(activeAtFirst);
   };
 
-  const selectRangeByIndex = (
-    begin: CellIndex,
-    end: CellIndex,
-    send = true
-  ): void => {
-    if (tableSelect) {
-      tableSelect.selectRangeByIndex(begin, end, send);
-    }
-  };
-
-  const couldSelectRangeByIndex = (
-    begin: CellIndex,
-    end: CellIndex
-  ): Set<AbstractCell> => {
-    if (!tableSelect) {
-      throw new Error('TableSelect is not instantiated yet.');
-    }
-    return tableSelect.couldSelectRangeByIndex(begin, end);
-  };
-
-  const resetSelection = (send = true) => {
-    if (tableSelect) {
-      tableSelect.resetSelection(send);
-    }
+  const unselect = () => {
+    return tableSelect.unselect() as
+      | AbstractCellCollection
+      | AbstractCell
+      | any;
   };
 
   const lockSelection = () => {
-    if (tableSelect) {
-      tableSelect.lock();
-      isLocked.value = tableSelect.isLocked;
-    }
+    tableSelect.lock();
+    isLocked.value = tableSelect.isLocked;
   };
 
   const unlockSelection = () => {
-    if (tableSelect) {
-      tableSelect.unlock();
-      isLocked.value = tableSelect.isLocked;
-    }
+    tableSelect.unlock();
+    isLocked.value = tableSelect.isLocked;
   };
 
   const resetModifiers = () => {
-    if (tableSelect) {
-      tableSelect.resetModifiers();
-    }
+    tableSelect.resetModifiers();
   };
 
-  const computeActiveRect = (activeOnly = false) => {
-    if (tableSelect) {
-      activeRect.value = tableSelect.computeRect(activeOnly);
-    }
+  const computeFocusedRect = (focusedOnly = false) => {
+    focusedRect.value = tableSelect.computeRect(focusedOnly);
 
-    return activeRect.value;
-  };
-
-  /**
-   * Watch for data change.
-   */
-  const enableDataWatcher = () => {
-    watch(
-      () => data,
-      () => {
-        nextTick(() => {
-          if (tableSelect) {
-            tableSelect.data = data.value;
-          }
-        });
-      },
-      {
-        immediate: false,
-        deep: options.resetOnChange,
-      }
-    );
+    return focusedRect.value;
   };
 
   return {
     selection,
-    activeCell,
+    focused,
     selectionBounds,
     selectedRows,
     selectedCols,
-    activeRect,
+    focusedRect,
 
     cellAtIndex,
 
     selectOne,
+    selectRange,
     selectRow,
     selectCol,
     selectAll,
-    selectRangeByIndex,
-    couldSelectRangeByIndex,
-    resetSelection,
+    unselect,
 
     lockSelection,
     unlockSelection,
@@ -285,6 +257,6 @@ export const useTableSelect: UseTableSelect = (
     altModifier,
     resetModifiers,
 
-    computeActiveRect,
+    computeFocusedRect,
   };
 };

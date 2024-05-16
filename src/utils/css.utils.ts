@@ -18,11 +18,8 @@ export const getCSSStyle = (element: HTMLElement, prop: string): string => {
     .getPropertyValue(prop);
 };
 
-export const getPixelsForCSS = (
-  element: HTMLElement,
-  variable: string
-): number => {
-  const style = getCSSStyle(element, variable);
+export const getPixelsForCSS = (element: HTMLElement, prop: string): number => {
+  const style = getCSSStyle(element, prop);
 
   if (style.length > 0) {
     const temp = document.createElement('div');

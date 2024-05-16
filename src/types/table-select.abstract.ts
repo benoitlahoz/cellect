@@ -1,4 +1,11 @@
-import type { AbstractCell, CellBounds, CellIndex } from './cell.abstract';
+import { AbstractCellCollection, CellCollection } from 'cell-collection';
+import type {
+  AbstractCell,
+  CellBounds,
+  CellIndex,
+  CellRange,
+  CellSize,
+} from 'cell-collection';
 
 export interface TableSelectOptions {
   /**
@@ -10,9 +17,9 @@ export interface TableSelectOptions {
    */
   colSelector?: string;
   /**
-   * The class to apply to active cell.
+   * The class to apply to focused cell.
    */
-  activeSelector?: string;
+  focusSelector?: string;
   /**
    * The class to apply to selected cells.
    */
@@ -92,13 +99,7 @@ export interface SelectionRect {
   };
 }
 
-export abstract class AbstractTableSelect {
-  /**
-   * Data associated to the selection.
-   * It is used only for the global 'topology' of the array.
-   */
-  public abstract data: Array<Array<any>>;
-
+export abstract class AbstractTableSelect extends AbstractCellCollection {
   /**
    * The container element of the table.
    */
@@ -112,7 +113,7 @@ export abstract class AbstractTableSelect {
   /**
    * The current selection.
    */
-  public abstract selection: Set<AbstractCell>;
+  public abstract selection: CellCollection;
 
   /**
    * Allow or not the multiselection on the table.
@@ -129,8 +130,14 @@ export abstract class AbstractTableSelect {
    */
   public abstract selectionBounds: CellBounds;
 
-  public abstract activeCell: AbstractCell | undefined;
+  /**
+   * The focused cell.
+   */
+  public abstract focused: AbstractCell | undefined;
 
+  /**
+   * The selection rectangle in pixels.
+   */
   public abstract selectionRect: SelectionRect;
 
   /**
@@ -168,40 +175,68 @@ export abstract class AbstractTableSelect {
   public abstract resetModifiers(): void;
 
   /**
-   * Select a sngle cell by its indexes.
+   * Select a single cell by its indexes.
    *
    * @param { number } row The row index of the cell.
    * @param { number } col The column index of the cell.
    * @param { boolean } resetSelection If `true` reset the selection (this cell will be the only one selected).
    * @param { boolean } onlyActiveCoords If `true` compute only the active cell rect.
-   * @param { boolean } active Set this cell as active.
+   * @param { boolean } focused Set this cell as active.
    */
   public abstract selectOne(
     row: number,
     col: number,
     resetSelection?: boolean,
     onlyActiveRect?: boolean,
-    active?: boolean
-  ): void;
-
-  public abstract selectRangeByIndex(
-    begin: CellIndex,
-    end: CellIndex,
-    send?: boolean
-  ): void;
-
-  public abstract couldSelectRangeByIndex(
-    begin: CellIndex,
-    end: CellIndex
-  ): Set<AbstractCell>;
-
-  public abstract unselectRangeByIndex(
-    begin: CellIndex,
-    end: CellIndex,
-    send?: boolean
+    focused?: boolean
   ): void;
 
   public abstract modifiersState: TableSelectModifiersState;
+
+  /**
+   * Find cells in a range and select them.
+   *
+   * @param { CellRange } range The range to select.
+   * @returns { CellCollection } A `CellCollection` with selected cells.
+   */
+  public abstract selectRange(range: CellRange): CellCollection;
+  /**
+   * Find cells between bounds and select them.
+   *
+   * @param { CellBounds } bounds The boundaries of the cells to select.
+   * @returns { CellCollection } A `CellCollection` with selected cells.
+   */
+  public abstract selectRange(bounds: CellBounds): CellCollection;
+  /**
+   * Find cells between two cells and select them.
+   *
+   * @param { AbstractCell } begin The first cell of the selection.
+   * @param { AbstractCell } end The last cell of the selection.
+   * @returns { CellCollection } A `CellCollection` with selected cells.
+   */
+  public abstract selectRange(
+    begin: AbstractCell,
+    end: AbstractCell
+  ): CellCollection;
+  /**
+   * Find cells between two cells positions and select them.
+   *
+   * @param { CellIndex } begin The position of the first cell of the selection.
+   * @param { CellIndex } end The position of the last cell of the selection.
+   * @returns { CellCollection } A `CellCollection` with selected cells.
+   */
+  public abstract selectRange(begin: CellIndex, end: CellIndex): CellCollection;
+  /**
+   * Find cells givenn a beginning position and a size and select them.
+   *
+   * @param { CellIndex } begin The position of the first cell of the selection.
+   * @param { CellSize } size The size of the selection.
+   * @returns { CellCollection } A `CellCollection` with selected cells.
+   */
+  public abstract selectRange(begin: CellIndex, size: CellSize): CellCollection;
+  public abstract selectRange(
+    ...args: (CellRange | CellBounds | AbstractCell | CellIndex | CellSize)[]
+  ): CellCollection;
 
   /**
    * Selects a whole row.
@@ -225,46 +260,9 @@ export abstract class AbstractTableSelect {
   public abstract selectCol(col: number, resetSelection?: boolean): void;
 
   /**
-   * Add / remove a range from a `Cell` to another `Cell` to the selection.
-   *
-   * @param { AbstractCell } begin A cell to begin from.
-   * @param { AbstractCell } end  A cell to end to.
-   * @param { boolean } unselect Unselect instead of selecting.
-   */
-  public abstract selectRange(
-    begin: AbstractCell,
-    end: AbstractCell,
-    unselect?: boolean
-  ): void;
-
-  public abstract couldSelectRange(
-    begin: AbstractCell,
-    end: AbstractCell,
-    unselect?: boolean
-  ): Set<AbstractCell>;
-
-  /**
    * Select all cells.
    *
    * @param { boolean } activeAtFirst Whether the 'active' cell is set at [0, 0] of the cells array.
    */
   public abstract selectAll(activeAtFirst?: boolean): void;
-
-  /**
-   * Unselect all cells.
-   *
-   * @param { boolean } send Send a 'select' event.
-   */
-  public abstract resetSelection(send?: boolean): void;
-
-  /**
-   * Get a `Cell` at given indexes (row, column).
-   *
-   * @param { number } row The row's index.
-   * @param { number } col The column's index.
-   */
-  public abstract cellAtIndex(
-    row: number,
-    col: number
-  ): AbstractCell | undefined;
 }
