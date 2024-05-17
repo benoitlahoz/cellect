@@ -230,7 +230,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
 
     if (resetSelection) this.unselect();
 
-    const range = this.selectRange(
+    const range = this.in(
       {
         row,
         col: 0,
@@ -258,7 +258,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
 
     if (resetSelection) this.unselect();
 
-    const range = this.selectRange(
+    const range = this.in(
       {
         row: 0,
         col,
@@ -735,6 +735,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
     const getChildrenForColSelector = getElementsByClassName(colSelector);
 
     const rows = getChildrenForRowSelector(this._element);
+    console.log(rows.length);
 
     for (const row of rows) {
       const cols = getChildrenForColSelector(row as HTMLElement);

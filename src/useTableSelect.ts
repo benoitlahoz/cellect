@@ -41,13 +41,13 @@ export interface UseTableSelectReturn {
   resetModifiers: AbstractTableSelect['resetModifiers'];
 
   computeFocusedRect: AbstractTableSelect['computeRect'];
+  resetCells: () => void;
 }
 
 export interface UseTableSelect {
   (
     element: Ref<HTMLElement | undefined>,
-    options: TableSelectOptions,
-    data?: Ref<any> | undefined
+    options: TableSelectOptions
   ): UseTableSelectReturn;
 }
 
@@ -58,8 +58,7 @@ export const useTableSelect: UseTableSelect = (
   // The container element.
   element: Ref<HTMLElement | undefined>,
   // Options for the table selector.
-  options: TableSelectOptions,
-  data?: Ref<any>
+  options: TableSelectOptions
 ) => {
   /**
    * The `TableSelect` instance.
@@ -122,17 +121,6 @@ export const useTableSelect: UseTableSelect = (
           tableSelect = new TableSelect(element.value, options);
           element.value.addEventListener('select', onSelect as any);
           element.value.addEventListener('modifier-change', onModifier as any);
-
-          if (data) {
-            watch(
-              () => data,
-              () => {
-                // Recompute cells on data change.
-                tableSelect.element = element.value!;
-              },
-              { deep: true }
-            );
-          }
         }
       });
     }
@@ -232,6 +220,10 @@ export const useTableSelect: UseTableSelect = (
     return focusedRect.value;
   };
 
+  const resetCells = () => {
+    tableSelect.element = element.value!;
+  };
+
   return {
     selection,
     focused,
@@ -258,5 +250,7 @@ export const useTableSelect: UseTableSelect = (
     resetModifiers,
 
     computeFocusedRect,
+
+    resetCells,
   };
 };
