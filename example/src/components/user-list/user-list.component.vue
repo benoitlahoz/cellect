@@ -10,22 +10,20 @@ import type { TableSelectionEvent } from '../../../../src/modules/table-select-e
 import { useTableSelect, TableSelectKey } from '../../../../src/useTableSelect';
 
 import UserItem from './user-item.component.vue';
+import UserCard from './user-card.component.vue';
 
 const tableRef: Ref<HTMLElement | undefined> = ref();
 const remoteUsers: Ref<any> = ref([]);
+const suggestedUsers: Ref<any> = ref([]);
 
-const tableSelect = useTableSelect(
-  tableRef,
-  {
-    rowSelector: 'list',
-    colSelector: 'user-item',
-    selectedSelector: 'selected',
-    focusSelector: 'focused',
-    resetOnChange: true,
-    clearOnBlur: true,
-  },
-  remoteUsers
-);
+const tableSelect = useTableSelect(tableRef, {
+  rowSelector: 'list',
+  colSelector: 'user-item',
+  selectedSelector: 'selected',
+  focusSelector: 'focused',
+  resetOnChange: true,
+  clearOnBlur: false, //true,
+});
 provide(TableSelectKey, tableSelect);
 
 const {
@@ -43,13 +41,14 @@ const {
   unlockSelection,
   resetModifiers,
   computeFocusedRect,
+  resetCells,
 } = tableSelect;
 
 onMounted(async () => {
-  const res = await fetch('https://randomuser.me/api/?results=30');
-  const json = await res.json();
+  const remote = await fetch('https://randomuser.me/api/?results=30');
+  const remoteJSON = await remote.json();
 
-  remoteUsers.value = json.results
+  remoteUsers.value = remoteJSON.results
     .map((user: any) => {
       return [
         {
@@ -66,7 +65,28 @@ onMounted(async () => {
     })
     .sort((a: any, b: any) => b[0].connected - a[0].connected);
 
+  const suggestions = await fetch('https://randomuser.me/api/?results=10');
+  const suggestionsJSON = await suggestions.json();
+
+  suggestedUsers.value = suggestionsJSON.results
+    .map((user: any) => {
+      return [
+        {
+          id: user.login.uuid,
+          firstname: user.name.first,
+          lastname: user.name.last,
+          avatar: user.picture.thumbnail,
+          picture: user.picture.large,
+          gender: user.gender,
+          email: user.email,
+          suggestion: true,
+        },
+      ];
+    })
+    .sort((a: any, b: any) => b[0].connected - a[0].connected);
+
   const timeout = setTimeout(() => {
+    resetCells();
     selectOne(0, 0);
 
     if (tableRef.value) {
@@ -76,6 +96,15 @@ onMounted(async () => {
     clearTimeout(timeout);
   }, 10);
 });
+
+const getDataAtPosition = (row: number, col: number) => {
+  if (row >= remoteUsers.value.length) {
+    const newRow = row - remoteUsers.value.length;
+    console.log(suggestedUsers.value[newRow]);
+    return suggestedUsers.value[newRow][col];
+  }
+  return remoteUsers.value[row][col];
+};
 </script>
 <template lang="pug">
 .user-component
@@ -87,7 +116,7 @@ onMounted(async () => {
     )
         .list(
             v-for="(row, rowIndex) in remoteUsers", 
-            :key="rowIndex",
+            :key="`remote-${rowIndex}`",
             :id="`row-${rowIndex}`",
             :class="`row-${rowIndex}`"
         )
@@ -101,11 +130,27 @@ onMounted(async () => {
                 :lastname="user.lastname"
                 :connected="user.connected"
             )
+        div SUGGESTIONS
+        .list(
+            v-for="(row, rowIndex) in suggestedUsers", 
+            :key="`sug-row-${rowIndex}`",
+            :id="`sug-row-${rowIndex}`"
+        )
+            user-item(
+                v-for="(user, colIndex) in row",
+                :key="`sug-${rowIndex}-${colIndex}`",
+                :id="`sug-col-${rowIndex}-${colIndex}`",
+
+                :avatar-url="user.avatar",
+                :firstname="user.firstname",
+                :lastname="user.lastname"
+                :connected="user.connected"
+            )
 
     .user-selection 
         .focused(
             v-if="focused",
-            :set="user = remoteUsers[focused.row][focused.col]"
+            :set="user = getDataAtPosition(focused.row, focused.col)"
         ) 
             .base
                 img(:src="user.picture")
@@ -119,11 +164,11 @@ onMounted(async () => {
             v-if="focused && selection",
             v-for="(cell, index) in selection",
         )
-            user-item(
-                v-if="remoteUsers[cell.row][cell.col] !== remoteUsers[focused.row][focused.col]",
-                :set="user = remoteUsers[cell.row][cell.col]"
+            user-card(
+                v-if="getDataAtPosition(cell.row, cell.col) !== getDataAtPosition(focused.row, focused.col)",
+                :set="user = getDataAtPosition(cell.row, cell.col)"
 
-                :avatar-url="user.avatar",
+                :avatar-url="user.picture",
                 :firstname="user.firstname",
                 :lastname="user.lastname"
                 :connected="user.connected"
@@ -133,10 +178,13 @@ onMounted(async () => {
 .user-component
     display: flex
     width: 100%
+    height: 0
+    flex-grow: 1
 
     .user-list
         display: flex
         flex-direction: column
+        flex-shrink: 0
         width: 300px
         padding: 1rem
         overflow-y: scroll
@@ -147,14 +195,19 @@ onMounted(async () => {
     .user-selection
         flex-grow: 1
         padding: 1rem
+        display: flex
+        flex-wrap: wrap
+        align-content: flex-start
 
         .focused
             display: flex
             flex-direction: column
             justify-content: center
-            width: fit-content
-            padding: 1rem
-            border-radius: 1rem
+            width: 520px
+            min-width: 520px
+            height: 260px
+            margin: 0.1rem
+            border-radius: 0.5rem
             border: 1px solid black
             font-size: 2rem
             line-height: 2.5rem

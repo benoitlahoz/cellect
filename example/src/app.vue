@@ -18,38 +18,47 @@ const onSpreadsheetSelect = (event: any) => {
 };
 </script>
 <template lang="pug">
-.toolbar 
-    button(
-        @click="router.push('/example')"
-    ) Spreadsheet
-    button(
-        @click="router.push('/example/users')"
-    ) Users List
+.main-component
+    .toolbar 
+        button(
+            @click="router.push('/example')"
+        ) Spreadsheet
+        button(
+            @click="router.push('/example/users')"
+        ) Users List
 
 
-router-view(
-    to="/",
-    v-slot="{ Component }"
-)
-    keep-alive
-        component(
-            :is="Component",
-            @select="onSpreadsheetSelect",
-        )
-
-div(style="display: flex") 
-    div(
-        v-for="selection in selected",
-        :key="`${selection.row}-${selection.col}`",
-        style="margin: 1rem"
+    router-view(
+        to="/",
+        v-slot="{ Component }"
     )
-        pre {{ selection.row }}-{{ selection.col }}: {{ selection.data }}
+        keep-alive
+            component(
+                :is="Component",
+                @select="onSpreadsheetSelect",
+            )
+
+    div(style="display: flex") 
+        div(
+            v-for="selection in selected",
+            :key="`${selection.row}-${selection.col}`",
+            style="margin: 1rem"
+        )
+            pre {{ selection.row }}-{{ selection.col }}: {{ selection.data }}
 </template>
 <style lang="sass">
-.toolbar
+.main-component
     display: flex
-    padding: 0.5rem
+    flex-direction: column
+    height: 100%
+    width: 100%
+    overflow: hidden
 
-    button
-        margin-right: 0.5rem
+    .toolbar
+        display: flex
+        padding: 1rem
+
+        button
+            margin-right: 0.5rem
+            height: fit-content
 </style>

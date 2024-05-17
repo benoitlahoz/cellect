@@ -1,6 +1,6 @@
 <script lang="ts">
 export default {
-  name: 'UserItem',
+  name: 'UserCard',
 };
 </script>
 <script setup lang="ts">
@@ -24,29 +24,31 @@ const props = defineProps({
 });
 </script>
 <template lang="pug">
-.user-item(
+.user-card(
     :class="{ connected: connected === true }",
 ) 
     img(
         v-if="avatarUrl",
-        :src="avatarUrl", 
-        height="30", 
-        width="30")
+        :src="avatarUrl")
     .name
         .first {{ firstname }}
-        .last &nbsp;{{ lastname }}
+        .last {{ lastname }}
 
 </template>
 <style lang="sass" scoped>
-.user-item
+.user-card
     flex-grow: 1
     display: flex
+    flex-direction: column
+    justify-content: center
     align-items: center
-    padding: 0.5rem
     background: lightsteelblue
     border-radius: 0.5rem
     margin: 0.1rem
-    height: fit-content
+    height: 260px
+    max-height: 260px
+    width: 260px
+    max-width: 260px
 
     &.connected
         background: slategrey
@@ -56,15 +58,32 @@ const props = defineProps({
             opacity: 0.5
 
     img
-        margin-right: 1rem
         border-radius: 50%
 
     .name
-        display: flex
+        display: inline-flex
+        flex-direction: column
+        align-items: center
+        justify-content: center
+        font-size: 1.5rem
+        width: 100%
         overflow: hidden
         white-space: nowrap
+        text-overflow: ellipsis
+
+        .first
+            padding-top: 1rem
+            display: flex
+            justify-content: center
+            width: 100%
+            overflow: hidden
+            white-space: nowrap
+            text-overflow: ellipsis
 
         .last
+            display: flex
+            justify-content: center
+            width: 100%
             text-transform: uppercase
             font-weight: bold
             overflow: hidden
