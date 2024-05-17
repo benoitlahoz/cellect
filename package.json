@@ -1,6 +1,6 @@
 {
   "name": "cellect",
-  "version": "0.9.0",
+  "version": "0.9.12",
   "description": "A vanilla Typescript/Javascript + Vue.js utility to handle table selection.",
   "author": "Benoît LAHOZ <info@benoitlahoz.io",
   "license": "MIT",
@@ -23,21 +23,22 @@
   "files": [
     "dist/**/*",
     "package.json",
+    "README.md",
     "LICENSE"
   ],
   "main": "./dist/cellect.umd.js",
   "module": "./dist/cellect.mjs",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/cellect.mjs",
       "require": "./dist/cellect.umd.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/src/index.d.ts"
     },
     "./use": {
-      "import": "./dist/useSelect.es.js",
-      "require": "./dist/useSelect.umd.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/useCellect.es.js",
+      "require": "./dist/useCellect.umd.js",
+      "types": "./dist/src/useCellect.d.ts"
     }
   },
   "scripts": {

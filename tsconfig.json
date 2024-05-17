@@ -19,9 +19,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.d.ts",
-    "example/src/components/spread-sheet/spread-sheet.utils.ts"
-  ]
+  "include": ["src"]
 }

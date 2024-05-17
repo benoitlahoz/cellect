@@ -735,7 +735,6 @@ export class Cellect extends CellCollection implements AbstractCellect {
     const getChildrenForColSelector = getElementsByClassName(colSelector);
 
     const rows = getChildrenForRowSelector(this._element);
-    console.log(rows.length);
 
     for (const row of rows) {
       const cols = getChildrenForColSelector(row as HTMLElement);
