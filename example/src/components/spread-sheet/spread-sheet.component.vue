@@ -16,7 +16,7 @@ import {
 } from 'vue';
 import type { Ref } from 'vue';
 import { numberToSpreadsheetColumn } from './spread-sheet.utils';
-import { useTableSelect, TableSelectKey } from '../../../../src/useTableSelect';
+import { useCellect, CellectKey } from '../../../../src/useCellect';
 import type { AbstractCell } from 'cell-collection';
 
 import type { UseStyle } from '../../use/useStyle';
@@ -47,7 +47,7 @@ if (!useStyle) {
 
 const { setCSSStyle, getCSSStyle } = useStyle();
 
-const tableSelect = useTableSelect(tableRef, {
+const tableSelect = useCellect(tableRef, {
   rowSelector: 'row',
   colSelector: 'col',
   selectedSelector: 'selected',
@@ -55,7 +55,7 @@ const tableSelect = useTableSelect(tableRef, {
   resetOnChange: false,
   clearOnBlur: false,
 });
-provide(TableSelectKey, tableSelect);
+provide(CellectKey, tableSelect);
 
 const {
   selection,

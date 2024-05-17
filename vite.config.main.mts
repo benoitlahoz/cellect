@@ -6,15 +6,20 @@ export default defineConfig({
   build: {
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
-      name: 'VueTableSelect',
+      name: 'Cellect',
     },
     rollupOptions: {
-      external: ['vue'],
+      external: ['cell-collection'],
+      output: {
+        globals: { 'cell-collection': 'CellCollection' },
+      },
     },
+    minify: 'terser',
   },
   plugins: [
     dts({
       insertTypesEntry: true,
+      exclude: ['**/example/**'],
     }),
   ],
 });

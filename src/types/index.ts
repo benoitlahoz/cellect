@@ -1,1 +1,1 @@
-export * from './table-select.abstract';
+export * from './cellect.abstract';

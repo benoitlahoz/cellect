@@ -1,12 +1,12 @@
 import { inject, onMounted, ref, type Ref } from 'vue';
 import type { CellRange } from 'cell-collection';
 import { HTMLCellDataAttributes } from 'cell-collection/dom';
-import { UseTableSelectReturn } from '../../../src/useTableSelect';
+import { UseCellectReturn } from '../../../src/useCellect';
 import type { UseStyle } from './useStyle';
 import { UseStyleKey } from '../injection-keys.types';
 
 export const useSelectionMove = (
-  tableSelect: UseTableSelectReturn,
+  tableSelect: UseCellectReturn,
   data: Ref<Array<Array<any>>>,
   element: Ref<HTMLElement | undefined>
 ) => {

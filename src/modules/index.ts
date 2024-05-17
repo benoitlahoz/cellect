@@ -1,1 +1,1 @@
-export * from './table-select.module';
+export * from './cellect.module';

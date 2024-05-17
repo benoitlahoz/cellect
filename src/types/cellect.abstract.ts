@@ -7,7 +7,7 @@ import type {
   CellSize,
 } from 'cell-collection';
 
-export interface TableSelectOptions {
+export interface CellectOptions {
   /**
    * The class name used to recognize rows.
    */
@@ -80,7 +80,7 @@ export interface TableSelectOptions {
   resetOnChange?: boolean;
 }
 
-export interface TableSelectModifiersState {
+export interface CellectModifiersState {
   contiguous: boolean;
   alt: boolean;
 }
@@ -99,7 +99,7 @@ export interface SelectionRect {
   };
 }
 
-export abstract class AbstractTableSelect extends AbstractCellCollection {
+export abstract class AbstractCellect extends AbstractCellCollection {
   /**
    * The container element of the table.
    */
@@ -108,7 +108,7 @@ export abstract class AbstractTableSelect extends AbstractCellCollection {
   /**
    * The options passed when creating the instance of `TableSelect`.
    */
-  public abstract readonly options: TableSelectOptions;
+  public abstract readonly options: CellectOptions;
 
   /**
    * The current selection.
@@ -191,7 +191,7 @@ export abstract class AbstractTableSelect extends AbstractCellCollection {
     focused?: boolean
   ): void;
 
-  public abstract modifiersState: TableSelectModifiersState;
+  public abstract modifiersState: CellectModifiersState;
 
   /**
    * Find cells in a range and select them.

@@ -8,19 +8,19 @@ import type {
   CellRange,
   CellSize,
 } from 'cell-collection';
-import { TableSelectOptions } from '../types/table-select.abstract';
+import { CellectOptions } from '../types/cellect.abstract';
 import type {
-  AbstractTableSelect,
+  AbstractCellect,
   SelectionRect,
-  TableSelectModifiersState,
-} from '../types/table-select.abstract';
-import { TableSelectEventSender } from './table-select-event.module';
-import { getCSSStyle, getElementsByClassName } from './../utils';
+  CellectModifiersState,
+} from '../types/cellect.abstract';
+import { CellectEventSender } from './cellect-event.module';
+import { getCSSStyle, getElementsByClassName } from '../utils';
 
 /**
  * Default options for this `TableSelect` instance.
  */
-export const DEFAULT_OPTIONS: TableSelectOptions = {
+export const DEFAULT_OPTIONS: CellectOptions = {
   rowSelector: 'row',
   colSelector: 'col',
   focusSelector: 'active',
@@ -41,11 +41,11 @@ export const DEFAULT_OPTIONS: TableSelectOptions = {
   resetOnChange: true,
 };
 
-export class TableSelect extends CellCollection implements AbstractTableSelect {
+export class Cellect extends CellCollection implements AbstractCellect {
   /**
    * Options passed by user at creation, with default options.
    */
-  private _options: TableSelectOptions;
+  private _options: CellectOptions;
 
   /**
    * The container element passed by user at creation.
@@ -83,7 +83,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
     /**
      * Options for the `TableSelect` instance.
      */
-    options: TableSelectOptions
+    options: CellectOptions
   ) {
     super();
 
@@ -168,7 +168,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
       } else {
         this.select(cell);
       }
-      TableSelectEventSender.sendSelect(this, undefined, focusedRectOnly);
+      CellectEventSender.sendSelect(this, undefined, focusedRectOnly);
     }
   }
 
@@ -214,7 +214,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
     ...args: (CellRange | CellBounds | AbstractCell | CellIndex | CellSize)[]
   ): CellCollection {
     if (this._isLocked) return new CellCollection();
-    TableSelectEventSender.sendSelect(this, undefined, false);
+    CellectEventSender.sendSelect(this, undefined, false);
     return (this as any).in(...args).select();
   }
 
@@ -242,7 +242,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
     ).select();
     this.focus(row, 0);
 
-    TableSelectEventSender.sendSelect(this);
+    CellectEventSender.sendSelect(this);
     return range;
   }
 
@@ -270,7 +270,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
     ).select();
     this.focus(0, col);
 
-    TableSelectEventSender.sendSelect(this);
+    CellectEventSender.sendSelect(this);
     return range;
   }
 
@@ -287,7 +287,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
     if (focusFirstCell) {
       this.focus(0, 0);
     }
-    TableSelectEventSender.sendSelect(this);
+    CellectEventSender.sendSelect(this);
   }
 
   /**
@@ -323,7 +323,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
   public resetModifiers(): void {
     this._contiguousPressed = false;
     this._altPressed = false;
-    TableSelectEventSender.sendModifierChange(this);
+    CellectEventSender.sendModifierChange(this);
   }
 
   /**
@@ -438,7 +438,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
       this.in(focused, cell).select();
     }
 
-    TableSelectEventSender.sendSelect(this, event);
+    CellectEventSender.sendSelect(this, event);
   }
 
   /**
@@ -461,14 +461,14 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
         if (!this._options.multiselection) return;
 
         this._contiguousPressed = true;
-        TableSelectEventSender.sendModifierChange(this, event);
+        CellectEventSender.sendModifierChange(this, event);
         break;
       }
       case this._options.altSelectionModifier: {
         if (!this._options.multiselection) return;
 
         this._altPressed = true;
-        TableSelectEventSender.sendModifierChange(this, event);
+        CellectEventSender.sendModifierChange(this, event);
         break;
       }
 
@@ -497,7 +497,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
         }
 
         this._handleKeySelect(next);
-        TableSelectEventSender.sendSelect(this, event);
+        CellectEventSender.sendSelect(this, event);
 
         break;
       }
@@ -524,7 +524,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
         }
 
         this._handleKeySelect(next);
-        TableSelectEventSender.sendSelect(this, event);
+        CellectEventSender.sendSelect(this, event);
 
         break;
       }
@@ -551,7 +551,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
         }
 
         this._handleKeySelect(next);
-        TableSelectEventSender.sendSelect(this, event);
+        CellectEventSender.sendSelect(this, event);
 
         break;
       }
@@ -578,7 +578,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
         }
 
         this._handleKeySelect(next);
-        TableSelectEventSender.sendSelect(this, event);
+        CellectEventSender.sendSelect(this, event);
 
         break;
       }
@@ -602,14 +602,14 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
       }
     }
 
-    TableSelectEventSender.sendModifierChange(this, event);
+    CellectEventSender.sendModifierChange(this, event);
   }
 
   private onBlur(event: any): void {
     if (this._options.clearOnBlur) {
       this.blur();
       this.unselect();
-      TableSelectEventSender.sendSelect(this, event);
+      CellectEventSender.sendSelect(this, event);
     }
   }
 
@@ -637,7 +637,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
         if (cell) {
           this.unselect();
           this.selectRange(this.focused, cell).select();
-          TableSelectEventSender.sendSelect(this, event);
+          CellectEventSender.sendSelect(this, event);
         }
       }
     }
@@ -646,7 +646,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
   private onLassoEnd(event: PointerEvent) {
     this._element.removeEventListener('pointermove', this.onLasso as any);
     window.removeEventListener('pointerup', this.onLassoEnd as any);
-    TableSelectEventSender.sendSelect(this, event);
+    CellectEventSender.sendSelect(this, event);
   }
 
   /**
@@ -829,7 +829,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
   /**
    * The options passed on creation.
    */
-  public get options(): TableSelectOptions {
+  public get options(): CellectOptions {
     return this._options;
   }
 
@@ -850,7 +850,7 @@ export class TableSelect extends CellCollection implements AbstractTableSelect {
   /**
    * State of the contiguous and alt modifiers.
    */
-  public get modifiersState(): TableSelectModifiersState {
+  public get modifiersState(): CellectModifiersState {
     return {
       contiguous: this._contiguousPressed,
       alt: this._altPressed,

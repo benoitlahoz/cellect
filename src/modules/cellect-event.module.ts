@@ -3,9 +3,9 @@ import type {
   AbstractCellCollection,
   CellBounds,
 } from 'cell-collection';
-import type { AbstractTableSelect, SelectionRect } from '../types';
+import type { AbstractCellect, SelectionRect } from '../types';
 
-export interface TableSelectionEvent extends CustomEvent {
+export interface CellectSelectionEvent extends CustomEvent {
   detail: {
     event: any;
     focused: AbstractCell | undefined;
@@ -17,7 +17,7 @@ export interface TableSelectionEvent extends CustomEvent {
   };
 }
 
-export interface TableModifierEvent extends CustomEvent {
+export interface CellectModifierEvent extends CustomEvent {
   detail: {
     event: Event;
     contiguousModifier: boolean;
@@ -25,9 +25,9 @@ export interface TableModifierEvent extends CustomEvent {
   };
 }
 
-export class TableSelectEventSender {
+export class CellectEventSender {
   public static sendSelect(
-    instance: AbstractTableSelect,
+    instance: AbstractCellect,
     originalEvent?: any,
     onlyActiveRect = false
   ): void {
@@ -44,7 +44,7 @@ export class TableSelectEventSender {
     // Compute coordinates of the selection + active cell if alt modifier is pressed.
     instance.computeRect(instance.modifiersState.alt || onlyActiveRect);
 
-    const event: TableSelectionEvent = new CustomEvent('select', {
+    const event: CellectSelectionEvent = new CustomEvent('select', {
       detail: {
         // Original event.
         event: originalEvent,
@@ -61,10 +61,10 @@ export class TableSelectEventSender {
   }
 
   public static sendModifierChange(
-    instance: AbstractTableSelect,
+    instance: AbstractCellect,
     originalEvent?: any
   ): void {
-    const event: TableModifierEvent = new CustomEvent('modifier-change', {
+    const event: CellectModifierEvent = new CustomEvent('modifier-change', {
       detail: {
         event: originalEvent,
         contiguousModifier: instance.modifiersState.contiguous,

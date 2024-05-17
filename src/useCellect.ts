@@ -1,11 +1,7 @@
-import { onBeforeUnmount, onMounted, nextTick, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, nextTick, ref } from 'vue';
 import type { InjectionKey, Ref } from 'vue';
-import { TableSelect } from './modules';
-import type {
-  AbstractTableSelect,
-  TableSelectOptions,
-  SelectionRect,
-} from './types';
+import { Cellect } from './modules';
+import type { AbstractCellect, CellectOptions, SelectionRect } from './types';
 import { CellCollection } from 'cell-collection';
 import type {
   AbstractCell,
@@ -15,55 +11,55 @@ import type {
   CellRange,
   CellSize,
 } from 'cell-collection';
-import { TableSelectEventSender } from './modules/table-select-event.module';
+import { CellectEventSender } from './modules/cellect-event.module';
 
-export interface UseTableSelectReturn {
+export interface UseCellectReturn {
   selection: Ref<CellCollection>;
   focused: Ref<AbstractCell | undefined>;
   selectionBounds: Ref<CellBounds | undefined>;
   selectedRows: Ref<Array<number>>;
   selectedCols: Ref<Array<number>>;
   focusedRect: Ref<SelectionRect>;
-  cellAtIndex: AbstractTableSelect['at'];
-  selectOne: AbstractTableSelect['selectOne'];
-  selectRange: AbstractTableSelect['selectRange'];
-  selectRow: AbstractTableSelect['selectRow'];
-  selectCol: AbstractTableSelect['selectCol'];
-  selectAll: AbstractTableSelect['selectAll'];
-  unselect: AbstractTableSelect['unselect'];
+  cellAtIndex: AbstractCellect['at'];
+  selectOne: AbstractCellect['selectOne'];
+  selectRange: AbstractCellect['selectRange'];
+  selectRow: AbstractCellect['selectRow'];
+  selectCol: AbstractCellect['selectCol'];
+  selectAll: AbstractCellect['selectAll'];
+  unselect: AbstractCellect['unselect'];
 
-  lockSelection: AbstractTableSelect['lock'];
-  unlockSelection: AbstractTableSelect['unlock'];
-  isLocked: Ref<AbstractTableSelect['isLocked']>;
+  lockSelection: AbstractCellect['lock'];
+  unlockSelection: AbstractCellect['unlock'];
+  isLocked: Ref<AbstractCellect['isLocked']>;
 
   contiguousModifier: Ref<boolean>;
   altModifier: Ref<boolean>;
-  resetModifiers: AbstractTableSelect['resetModifiers'];
+  resetModifiers: AbstractCellect['resetModifiers'];
 
-  computeFocusedRect: AbstractTableSelect['computeRect'];
+  computeFocusedRect: AbstractCellect['computeRect'];
   resetCells: () => void;
 }
 
-export interface UseTableSelect {
+export interface UseCellect {
   (
     element: Ref<HTMLElement | undefined>,
-    options: TableSelectOptions
-  ): UseTableSelectReturn;
+    options: CellectOptions
+  ): UseCellectReturn;
 }
 
-export const TableSelectKey: InjectionKey<UseTableSelectReturn> =
+export const CellectKey: InjectionKey<UseCellectReturn> =
   Symbol('useTableSelect');
 
-export const useTableSelect: UseTableSelect = (
+export const useCellect: UseCellect = (
   // The container element.
   element: Ref<HTMLElement | undefined>,
   // Options for the table selector.
-  options: TableSelectOptions
+  options: CellectOptions
 ) => {
   /**
    * The `TableSelect` instance.
    */
-  let tableSelect: AbstractTableSelect;
+  let cellect: AbstractCellect;
 
   /**
    * The `TableSelect` current selection made reactive.
@@ -118,7 +114,7 @@ export const useTableSelect: UseTableSelect = (
     if (element.value) {
       nextTick(() => {
         if (element.value) {
-          tableSelect = new TableSelect(element.value, options);
+          cellect = new Cellect(element.value, options);
           element.value.addEventListener('select', onSelect as any);
           element.value.addEventListener('modifier-change', onModifier as any);
         }
@@ -132,8 +128,8 @@ export const useTableSelect: UseTableSelect = (
       element.value.removeEventListener('modifier-change', onModifier as any);
     }
 
-    if (tableSelect) {
-      tableSelect.dispose();
+    if (cellect) {
+      cellect.dispose();
     }
   });
 
@@ -152,7 +148,7 @@ export const useTableSelect: UseTableSelect = (
   };
 
   const cellAtIndex = (row: number, col: number): AbstractCell | undefined => {
-    return tableSelect.at(row, col);
+    return cellect.at(row, col);
   };
 
   const selectOne = (
@@ -162,18 +158,18 @@ export const useTableSelect: UseTableSelect = (
     onlyActiveRect = true,
     active = true
   ): void => {
-    if (tableSelect) {
-      tableSelect.selectOne(row, col, resetSelection, onlyActiveRect, active);
+    if (cellect) {
+      cellect.selectOne(row, col, resetSelection, onlyActiveRect, active);
     }
   };
 
   const selectRange = (
     ...args: (CellRange | CellBounds | AbstractCell | CellIndex | CellSize)[]
   ): CellCollection => {
-    const selection = tableSelect.selectRange(...args) as CellCollection;
+    const selection = cellect.selectRange(...args) as CellCollection;
 
     // We trigger event from here, as it will not be triggered by the TableSelect.
-    TableSelectEventSender.sendSelect(tableSelect);
+    CellectEventSender.sendSelect(cellect);
     return selection;
   };
 
@@ -182,46 +178,43 @@ export const useTableSelect: UseTableSelect = (
     moveActive = true,
     resetSelection = true
   ): void => {
-    tableSelect.selectRow(row, moveActive, resetSelection);
+    cellect.selectRow(row, moveActive, resetSelection);
   };
 
   const selectCol = (col: number, resetSelection = true): void => {
-    tableSelect.selectCol(col, resetSelection);
+    cellect.selectCol(col, resetSelection);
   };
 
   const selectAll = (activeAtFirst = false) => {
-    tableSelect.selectAll(activeAtFirst);
+    cellect.selectAll(activeAtFirst);
   };
 
   const unselect = () => {
-    return tableSelect.unselect() as
-      | AbstractCellCollection
-      | AbstractCell
-      | any;
+    return cellect.unselect() as AbstractCellCollection | AbstractCell | any;
   };
 
   const lockSelection = () => {
-    tableSelect.lock();
-    isLocked.value = tableSelect.isLocked;
+    cellect.lock();
+    isLocked.value = cellect.isLocked;
   };
 
   const unlockSelection = () => {
-    tableSelect.unlock();
-    isLocked.value = tableSelect.isLocked;
+    cellect.unlock();
+    isLocked.value = cellect.isLocked;
   };
 
   const resetModifiers = () => {
-    tableSelect.resetModifiers();
+    cellect.resetModifiers();
   };
 
   const computeFocusedRect = (focusedOnly = false) => {
-    focusedRect.value = tableSelect.computeRect(focusedOnly);
+    focusedRect.value = cellect.computeRect(focusedOnly);
 
     return focusedRect.value;
   };
 
   const resetCells = () => {
-    tableSelect.element = element.value!;
+    cellect.element = element.value!;
   };
 
   return {

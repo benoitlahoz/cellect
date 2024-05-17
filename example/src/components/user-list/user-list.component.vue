@@ -6,8 +6,7 @@ export default {
 <script setup lang="ts">
 import { onMounted, provide, ref, nextTick, watch } from 'vue';
 import type { Ref } from 'vue';
-import type { TableSelectionEvent } from '../../../../src/modules/table-select-event.module';
-import { useTableSelect, TableSelectKey } from '../../../../src/useTableSelect';
+import { useCellect, CellectKey } from '../../../../src/useCellect';
 
 import UserItem from './user-item.component.vue';
 import UserCard from './user-card.component.vue';
@@ -16,7 +15,7 @@ const tableRef: Ref<HTMLElement | undefined> = ref();
 const remoteUsers: Ref<any> = ref([]);
 const suggestedUsers: Ref<any> = ref([]);
 
-const tableSelect = useTableSelect(tableRef, {
+const tableSelect = useCellect(tableRef, {
   rowSelector: 'list',
   colSelector: 'user-item',
   selectedSelector: 'selected',
@@ -24,7 +23,7 @@ const tableSelect = useTableSelect(tableRef, {
   resetOnChange: true,
   clearOnBlur: false, //true,
 });
-provide(TableSelectKey, tableSelect);
+provide(CellectKey, tableSelect);
 
 const {
   selection,
