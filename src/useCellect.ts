@@ -47,8 +47,7 @@ export interface UseCellect {
   ): UseCellectReturn;
 }
 
-export const CellectKey: InjectionKey<UseCellectReturn> =
-  Symbol('useTableSelect');
+export const CellectKey: InjectionKey<UseCellectReturn> = Symbol('useCellect');
 
 export const useCellect: UseCellect = (
   // The container element.
@@ -158,9 +157,7 @@ export const useCellect: UseCellect = (
     onlyActiveRect = true,
     active = true
   ): void => {
-    if (cellect) {
-      cellect.selectOne(row, col, resetSelection, onlyActiveRect, active);
-    }
+    cellect.selectOne(row, col, resetSelection, onlyActiveRect, active);
   };
 
   const selectRange = (
