@@ -43,7 +43,7 @@ export interface UseCellectReturn {
 export interface UseCellect {
   (
     element: Ref<HTMLElement | Component | undefined>,
-    options: CellectOptions
+    options: CellectOptions // TODO: 'silence' debug mode.
   ): UseCellectReturn;
 }
 

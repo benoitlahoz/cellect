@@ -1,6 +1,6 @@
 {
   "name": "cellect",
-  "version": "0.9.15",
+  "version": "0.9.17",
   "description": "A vanilla Typescript/Javascript + Vue.js utility to handle table selection.",
   "author": "Benoît LAHOZ <info@benoitlahoz.io",
   "license": "MIT",

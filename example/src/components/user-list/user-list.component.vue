@@ -5,13 +5,13 @@ export default {
 </script>
 <script setup lang="ts">
 import { onMounted, provide, ref, nextTick, watch } from 'vue';
-import type { Ref } from 'vue';
+import type { Component, Ref } from 'vue';
 import { useCellect, CellectKey } from '../../../../src/useCellect';
 
 import UserListEmbed from './user-list-embed.component.vue';
 import UserCard from './user-card.component.vue';
 
-const tableRef: Ref<HTMLElement | undefined> = ref();
+const tableRef: Ref<Component | undefined> = ref();
 const remoteUsers: Ref<any> = ref([]);
 const suggestedUsers: Ref<any> = ref([]);
 
@@ -89,7 +89,7 @@ onMounted(async () => {
     selectOne(0, 0);
 
     if (tableRef.value) {
-      tableRef.value.focus();
+      (tableRef.value as any).$el.focus();
     }
 
     clearTimeout(timeout);
