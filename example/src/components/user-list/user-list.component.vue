@@ -8,7 +8,7 @@ import { onMounted, provide, ref, nextTick, watch } from 'vue';
 import type { Ref } from 'vue';
 import { useCellect, CellectKey } from '../../../../src/useCellect';
 
-import UserItem from './user-item.component.vue';
+import UserListEmbed from './user-list-embed.component.vue';
 import UserCard from './user-card.component.vue';
 
 const tableRef: Ref<HTMLElement | undefined> = ref();
@@ -107,71 +107,39 @@ const getDataAtPosition = (row: number, col: number) => {
 </script>
 <template lang="pug">
 .user-component
+  user-list-embed(
+    ref="tableRef",
+    :remote-users="remoteUsers",
+    :suggested-users="suggestedUsers",
+    :focused="focused"
+  )
 
-    // This is the root component passed to TableSelect.
+  .user-selection 
+    .focused(
+        v-if="focused",
+        :set="user = getDataAtPosition(focused.row, focused.col)"
+    ) 
+        .base
+            img(:src="user.picture")
+            .name 
+                .first {{ user.firstname }}
+                .last &nbsp;{{ user.lastname }}
+        div {{ user.gender }}
+        div {{ user.email }}
 
-    .user-list(
-        ref="tableRef"
+    template(
+        v-if="focused && selection",
+        v-for="(cell, index) in selection",
     )
-        .list(
-            v-for="(row, rowIndex) in remoteUsers", 
-            :key="`remote-${rowIndex}`",
-            :id="`row-${rowIndex}`",
-            :class="`row-${rowIndex}`"
+        user-card(
+            v-if="getDataAtPosition(cell.row, cell.col) !== getDataAtPosition(focused.row, focused.col)",
+            :set="user = getDataAtPosition(cell.row, cell.col)"
+
+            :avatar-url="user.picture",
+            :firstname="user.firstname",
+            :lastname="user.lastname"
+            :connected="user.connected"
         )
-            user-item(
-                v-for="(user, colIndex) in row",
-                :key="`${rowIndex}-${colIndex}`",
-                :id="`col-${rowIndex}-${colIndex}`",
-
-                :avatar-url="user.avatar",
-                :firstname="user.firstname",
-                :lastname="user.lastname"
-                :connected="user.connected"
-            )
-        div SUGGESTIONS
-        .list(
-            v-for="(row, rowIndex) in suggestedUsers", 
-            :key="`sug-row-${rowIndex}`",
-            :id="`sug-row-${rowIndex}`"
-        )
-            user-item(
-                v-for="(user, colIndex) in row",
-                :key="`sug-${rowIndex}-${colIndex}`",
-                :id="`sug-col-${rowIndex}-${colIndex}`",
-
-                :avatar-url="user.avatar",
-                :firstname="user.firstname",
-                :lastname="user.lastname"
-                :connected="user.connected"
-            )
-
-    .user-selection 
-        .focused(
-            v-if="focused",
-            :set="user = getDataAtPosition(focused.row, focused.col)"
-        ) 
-            .base
-                img(:src="user.picture")
-                .name 
-                    .first {{ user.firstname }}
-                    .last &nbsp;{{ user.lastname }}
-            div {{ user.gender }}
-            div {{ user.email }}
-
-        template(
-            v-if="focused && selection",
-            v-for="(cell, index) in selection",
-        )
-            user-card(
-                v-if="getDataAtPosition(cell.row, cell.col) !== getDataAtPosition(focused.row, focused.col)",
-                :set="user = getDataAtPosition(cell.row, cell.col)"
-
-                :avatar-url="user.picture",
-                :firstname="user.firstname",
-                :lastname="user.lastname"
-                :connected="user.connected"
-            )
 </template>
 <style lang="sass" scoped>
 .user-component
@@ -179,17 +147,6 @@ const getDataAtPosition = (row: number, col: number) => {
     width: 100%
     height: 0
     flex-grow: 1
-
-    .user-list
-        display: flex
-        flex-direction: column
-        flex-shrink: 0
-        width: 300px
-        padding: 1rem
-        overflow-y: scroll
-
-        &:focus
-            outline: none
 
     .user-selection
         flex-grow: 1
