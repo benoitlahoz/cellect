@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, nextTick, ref } from 'vue';
+import { onBeforeUnmount, onMounted, nextTick, ref, watch } from 'vue';
 import type { InjectionKey, Ref, Component } from 'vue';
 import { Cellect } from './modules';
 import type { AbstractCellect, CellectOptions, SelectionRect } from './types';
@@ -113,6 +113,60 @@ export const useCellect: UseCellect = (
    * The current selection lock status made reactive.
    */
   const isLocked: Ref<boolean> = ref(false);
+
+  watch(
+    () => target.value,
+    () => {
+      if (!element.value && target.value) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`useCellect: target's value changed`, target.value);
+        }
+
+        nextTick(() => {
+          if (target.value && typeof target.value !== 'undefined') {
+            // Dev
+            if (process.env.NODE_ENV === 'development') {
+              console.warn(`useCellect: target's value is defined`);
+              console.warn(
+                `useCellect: target's value has '$el'`,
+                typeof (target.value as any).$el !== 'undefined'
+              );
+            }
+
+            element.value = (target.value as any).$el
+              ? (target.value as any).$el
+              : target.value;
+
+            // Dev
+            if (process.env.NODE_ENV === 'development') {
+              console.warn(`useCellect: element's value is now`, element.value);
+            }
+
+            cellect = new Cellect(element.value as HTMLElement, options);
+
+            // Dev
+            if (process.env.NODE_ENV === 'development') {
+              console.warn(
+                `useCellect: 'Cellect' instance was created.`,
+                cellect
+              );
+            }
+
+            (element.value as HTMLElement).addEventListener(
+              'select',
+              onSelect as any
+            );
+            (element.value as HTMLElement).addEventListener(
+              'modifier-change',
+              onModifier as any
+            );
+          }
+        });
+      }
+    },
+    { immediate: true, deep: true }
+  );
+  /*
   onMounted(() => {
     if (target.value) {
       nextTick(() => {
@@ -134,7 +188,7 @@ export const useCellect: UseCellect = (
       });
     }
   });
-
+  */
   onBeforeUnmount(() => {
     if (element.value) {
       element.value.removeEventListener('select', onSelect as any);
