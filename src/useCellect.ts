@@ -1,5 +1,5 @@
 import { onBeforeUnmount, onMounted, nextTick, ref } from 'vue';
-import type { InjectionKey, Ref } from 'vue';
+import type { InjectionKey, Ref, Component } from 'vue';
 import { Cellect } from './modules';
 import type { AbstractCellect, CellectOptions, SelectionRect } from './types';
 import { CellCollection } from 'cell-collection';
@@ -42,7 +42,7 @@ export interface UseCellectReturn {
 
 export interface UseCellect {
   (
-    element: Ref<HTMLElement | undefined>,
+    element: Ref<HTMLElement | Component | undefined>,
     options: CellectOptions
   ): UseCellectReturn;
 }
@@ -50,11 +50,15 @@ export interface UseCellect {
 export const CellectKey: InjectionKey<UseCellectReturn> = Symbol('useCellect');
 
 export const useCellect: UseCellect = (
-  // The container element.
-  element: Ref<HTMLElement | undefined>,
+  // The container element or component.
+  target: Ref<HTMLElement | Component | undefined>,
   // Options for the table selector.
   options: CellectOptions
 ) => {
+  /**
+   *
+   */
+  const element: Ref<HTMLElement | undefined> = ref();
   /**
    * The `TableSelect` instance.
    */
@@ -110,12 +114,22 @@ export const useCellect: UseCellect = (
    */
   const isLocked: Ref<boolean> = ref(false);
   onMounted(() => {
-    if (element.value) {
+    if (target.value) {
       nextTick(() => {
-        if (element.value) {
-          cellect = new Cellect(element.value, options);
-          element.value.addEventListener('select', onSelect as any);
-          element.value.addEventListener('modifier-change', onModifier as any);
+        if (target.value && typeof target.value !== 'undefined') {
+          element.value = (target.value as any).$el
+            ? (target.value as any).$el
+            : target.value;
+
+          cellect = new Cellect(element.value as HTMLElement, options);
+          (element.value as HTMLElement).addEventListener(
+            'select',
+            onSelect as any
+          );
+          (element.value as HTMLElement).addEventListener(
+            'modifier-change',
+            onModifier as any
+          );
         }
       });
     }
