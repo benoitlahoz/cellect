@@ -840,6 +840,24 @@ export class Cellect extends CellCollection implements AbstractCellect {
 
         // Select range from active cell to next cell.
         this.selectRange(this.focused, cell);
+
+        if (cell) {
+          const element = cell.element;
+          if (element) {
+            const rect = element.getBoundingClientRect();
+
+            // Only completely visible elements return true
+            const isInViewport =
+              rect.top >= this._element.offsetTop &&
+              rect.bottom <= this._element.offsetHeight;
+
+            if (!isInViewport) {
+              element.scrollIntoView({
+                block: 'nearest',
+              });
+            }
+          }
+        }
       }
     }
   }
