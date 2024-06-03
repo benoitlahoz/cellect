@@ -884,7 +884,7 @@ export class Cellect extends CellCollection implements AbstractCellect {
    */
   private _callPlugins(hook: string, ...args: any[]): void {
     for (const plugin of this._plugins) {
-      (plugin as any)[hook](this, ...args);
+      (plugin as any)[hook] && (plugin as any)[hook](this, ...args);
     }
   }
 
