@@ -6,6 +6,7 @@ import type {
   CellRange,
   CellSize,
 } from 'cell-collection';
+import { AbstractCellectPlugin } from './cellect-plugin.abstract';
 
 export interface CellectOptions {
   /**
@@ -78,7 +79,21 @@ export interface CellectOptions {
    * Typically, if the table contains `input` elements that mutate the data, set to `false`.
    */
   resetOnChange?: boolean;
+  /**
+   * Debug (only available in development mode).
+   */
+  debug?: boolean;
+  /**
+   * Plugins.
+   */
+  plugins?: Array<CellectPluginType | CellectPluginDefinition>;
 }
+
+export type CellectPluginType = {
+  new (...args: any[]): AbstractCellectPlugin;
+} & typeof AbstractCellectPlugin;
+
+export type CellectPluginDefinition = [CellectPluginType, Record<string, any>];
 
 export interface CellectModifiersState {
   contiguous: boolean;

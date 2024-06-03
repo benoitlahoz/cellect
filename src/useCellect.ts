@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, nextTick, ref, watch } from 'vue';
+import { onBeforeUnmount, nextTick, ref, watch } from 'vue';
 import type { InjectionKey, Ref, Component } from 'vue';
 import { Cellect } from './modules';
 import type { AbstractCellect, CellectOptions, SelectionRect } from './types';
@@ -12,6 +12,7 @@ import type {
   CellSize,
 } from 'cell-collection';
 import { CellectEventSender } from './modules/cellect-event.module';
+import { useDebug } from './utils';
 
 export interface UseCellectReturn {
   selection: Ref<CellCollection>;
@@ -43,7 +44,7 @@ export interface UseCellectReturn {
 export interface UseCellect {
   (
     element: Ref<HTMLElement | Component | undefined>,
-    options: CellectOptions // TODO: 'silence' debug mode.
+    options: CellectOptions
   ): UseCellectReturn;
 }
 
@@ -114,43 +115,37 @@ export const useCellect: UseCellect = (
    */
   const isLocked: Ref<boolean> = ref(false);
 
+  /**
+   * Debug funcction (NoOp at launch)
+   */
+
+  let debug = (..._: any[]) => {};
+
   watch(
     () => target.value,
     () => {
       if (!element.value && target.value) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn(`useCellect: target's value changed`, target.value);
+        if (process.env.NODE_ENV === 'development' && options.debug === true) {
+          debug = useDebug('useCellect');
         }
+
+        debug(`Target's value changed`, target.value);
 
         nextTick(() => {
           if (target.value && typeof target.value !== 'undefined') {
-            // Dev
-            if (process.env.NODE_ENV === 'development') {
-              console.warn(`useCellect: target's value is defined`);
-              console.warn(
-                `useCellect: target's value has '$el'`,
-                typeof (target.value as any).$el !== 'undefined'
-              );
-            }
+            debug(`Target's value is defined.`);
+            debug(
+              `Target's value is a component: %s.'`,
+              typeof (target.value as any).$el !== 'undefined'
+            );
 
             element.value = (target.value as any).$el
               ? (target.value as any).$el
               : target.value;
 
-            // Dev
-            if (process.env.NODE_ENV === 'development') {
-              console.warn(`useCellect: element's value is now`, element.value);
-            }
+            debug(`Element's value is now`, element.value);
 
             cellect = new Cellect(element.value as HTMLElement, options);
-
-            // Dev
-            if (process.env.NODE_ENV === 'development') {
-              console.warn(
-                `useCellect: 'Cellect' instance was created.`,
-                cellect
-              );
-            }
 
             (element.value as HTMLElement).addEventListener(
               'select',
@@ -190,6 +185,8 @@ export const useCellect: UseCellect = (
   });
   */
   onBeforeUnmount(() => {
+    debug(`Will unmount.`);
+
     if (element.value) {
       element.value.removeEventListener('select', onSelect as any);
       element.value.removeEventListener('modifier-change', onModifier as any);
@@ -279,6 +276,7 @@ export const useCellect: UseCellect = (
   };
 
   const resetCells = () => {
+    debug('Target element will reset.');
     cellect.element = element.value!;
   };
 

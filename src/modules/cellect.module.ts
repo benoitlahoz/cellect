@@ -15,7 +15,10 @@ import type {
   CellectModifiersState,
 } from '../types/cellect.abstract';
 import { CellectEventSender } from './cellect-event.module';
-import { getCSSStyle, getElementsByClassName } from '../utils';
+import { getCSSStyle, getElementsByClassName, useDebug } from '../utils';
+import { AbstractCellectPlugin } from '../types';
+
+// TODO: Wrap 'select' so we can call plgins beforeSelect and selected hooks.
 
 /**
  * Default options for this `TableSelect` instance.
@@ -39,6 +42,8 @@ export const DEFAULT_OPTIONS: CellectOptions = {
     : 'Control',
   multiselection: true,
   resetOnChange: true,
+  debug: false,
+  plugins: [],
 };
 
 export class Cellect extends CellCollection implements AbstractCellect {
@@ -75,6 +80,13 @@ export class Cellect extends CellCollection implements AbstractCellect {
    */
   private _isLocked = false;
 
+  /**
+   * Debug function (NoOp by default).
+   */
+  private _debug = (..._: any[]) => {};
+
+  private _plugins: Set<AbstractCellectPlugin> = new Set();
+
   constructor(
     /**
      * A container element to get cells from.
@@ -94,6 +106,26 @@ export class Cellect extends CellCollection implements AbstractCellect {
       ...options,
     };
 
+    for (const entry of this._options.plugins!) {
+      if (Array.isArray(entry)) {
+        const Plugin = entry[0];
+        const config = entry[1];
+        this._plugins.add(new Plugin(config));
+      } else {
+        const Plugin = entry;
+        this._plugins.add(new Plugin());
+      }
+    }
+
+    this._callPlugins('beforeInit');
+
+    if (
+      process.env.NODE_ENV === 'development' &&
+      this._options.debug === true
+    ) {
+      this._debug = useDebug('Cellect');
+    }
+
     // Create bound listeners.
     this.onKeydown = this.onKeydown.bind(this);
     this.onKeyup = this.onKeyup.bind(this);
@@ -112,9 +144,20 @@ export class Cellect extends CellCollection implements AbstractCellect {
 
     this.clearOnBlur = this._options.clearOnBlur!;
     this.multiselection = this.options.multiselection!;
+
+    this._debug('Cellect was instantiated on element', this.element);
+
+    this._callPlugins('inited');
   }
 
   public dispose(): void {
+    this._debug('Cellect instance will dispose.');
+
+    // Dispose plugins.
+    for (const plugin of this._plugins) {
+      plugin.dispose && plugin.dispose();
+    }
+
     // Clean the element.
     this._element.setAttribute('draggable', 'false');
 
@@ -129,6 +172,8 @@ export class Cellect extends CellCollection implements AbstractCellect {
    * Disallow selecting or unselecting.
    */
   public lock(): void {
+    this._debug('Lock selection.');
+
     this._isLocked = true;
   }
 
@@ -136,6 +181,8 @@ export class Cellect extends CellCollection implements AbstractCellect {
    * Unlock the selection and allow selecting.
    */
   public unlock(): void {
+    this._debug('Unlock selection.');
+
     this._isLocked = false;
   }
 
@@ -155,7 +202,13 @@ export class Cellect extends CellCollection implements AbstractCellect {
     focusedRectOnly = true,
     focused = true
   ): void {
-    if (this._isLocked) return;
+    if (this._isLocked) {
+      this._debug('Trying to select a cell but selection is locked.');
+
+      return;
+    }
+
+    this._callPlugins('beforeSelect');
 
     const cell = this.at(row, col);
 
@@ -169,7 +222,12 @@ export class Cellect extends CellCollection implements AbstractCellect {
         this.select(cell);
       }
       CellectEventSender.sendSelect(this, undefined, focusedRectOnly);
+      this._debug('Cell was selected.', cell);
+    } else {
+      this._debug('No cell to select at [%s, %s].', row, col);
     }
+
+    this._callPlugins('selected');
   }
 
   /**
@@ -213,9 +271,23 @@ export class Cellect extends CellCollection implements AbstractCellect {
   public selectRange(
     ...args: (CellRange | CellBounds | AbstractCell | CellIndex | CellSize)[]
   ): CellCollection {
-    if (this._isLocked) return new CellCollection();
+    if (this._isLocked) {
+      this._debug('Trying to select a range but selection is locked.');
+
+      return new CellCollection();
+    }
+
+    this._debug('Select range.');
+
+    this._callPlugins('beforeSelect');
+
     CellectEventSender.sendSelect(this, undefined, false);
-    return (this as any).in(...args).select();
+
+    const selection = (this as any).in(...args).select();
+
+    this._callPlugins('selected');
+
+    return selection;
   }
 
   /**
@@ -226,9 +298,17 @@ export class Cellect extends CellCollection implements AbstractCellect {
    * @returns { CellCollection } A new `CellCollection that contains the row's cells.
    */
   public selectRow(row: number, resetSelection = true): CellCollection {
-    if (this._isLocked) return new CellCollection();
+    if (this._isLocked) {
+      this._debug('Trying to select a row but selection is locked.');
+
+      return new CellCollection();
+    }
+
+    this._debug('Selecting a row.');
 
     if (resetSelection) this.unselect();
+
+    this._callPlugins('beforeSelect');
 
     const range = this.in(
       {
@@ -240,9 +320,13 @@ export class Cellect extends CellCollection implements AbstractCellect {
         col: this.lastColumnNumber,
       }
     ).select();
+
     this.focus(row, 0);
 
     CellectEventSender.sendSelect(this);
+
+    this._callPlugins('selected');
+
     return range;
   }
 
@@ -254,9 +338,17 @@ export class Cellect extends CellCollection implements AbstractCellect {
    * @returns { CellCollection } A new `CellCollection that contains the column's cells.
    */
   public selectCol(col: number, resetSelection = true): CellCollection {
-    if (this._isLocked) return new CellCollection();
+    if (this._isLocked) {
+      this._debug('Trying to select a column but selection is locked.');
+
+      return new CellCollection();
+    }
+
+    this._debug('Selecting a column.');
 
     if (resetSelection) this.unselect();
+
+    this._callPlugins('beforeSelect');
 
     const range = this.in(
       {
@@ -268,9 +360,13 @@ export class Cellect extends CellCollection implements AbstractCellect {
         col,
       }
     ).select();
+
     this.focus(0, col);
 
     CellectEventSender.sendSelect(this);
+
+    this._callPlugins('selected');
+
     return range;
   }
 
@@ -280,7 +376,15 @@ export class Cellect extends CellCollection implements AbstractCellect {
    * @param { boolean } focusFirstCell Focus on the first cell of the `TableSelect` once everything has been selected.
    */
   public selectAll(focusFirstCell = false): void {
-    if (this._isLocked) return;
+    if (this._isLocked) {
+      this._debug('Trying to select all cells but selection is locked.');
+
+      return;
+    }
+
+    this._debug('Selecting all cells.');
+
+    this._callPlugins('beforeSelect');
 
     this.select();
 
@@ -288,6 +392,8 @@ export class Cellect extends CellCollection implements AbstractCellect {
       this.focus(0, 0);
     }
     CellectEventSender.sendSelect(this);
+
+    this._callPlugins('selected');
   }
 
   /**
@@ -310,10 +416,19 @@ export class Cellect extends CellCollection implements AbstractCellect {
   public unselect(
     ...args: (AbstractCell | number | CellIndex | undefined)[]
   ): AbstractCell | CellCollection | undefined {
-    if (this._isLocked) return;
+    if (this._isLocked) {
+      this._debug('Trying to unselect cells but selection is locked.');
+
+      return;
+    }
+
+    this._callPlugins('beforeUnselect');
 
     const res = super.unselect(...(args as any));
     // TableSelectEventSender.sendSelect(this);
+
+    this._callPlugins('unselected');
+
     return res;
   }
 
@@ -321,6 +436,8 @@ export class Cellect extends CellCollection implements AbstractCellect {
    * Reset the modifier keys to `false`.
    */
   public resetModifiers(): void {
+    this._debug('Reset modifiers.');
+
     this._contiguousPressed = false;
     this._altPressed = false;
     CellectEventSender.sendModifierChange(this);
@@ -333,6 +450,8 @@ export class Cellect extends CellCollection implements AbstractCellect {
    * @returns { SelectionRect } The selection's rectangle in pixels.
    */
   public computeRect(focusedOnly = false): SelectionRect {
+    this._debug('Compute selection rectangle.');
+
     // Compute bounds of the selection in pixels.
 
     const selection = this.selected;
@@ -375,6 +494,8 @@ export class Cellect extends CellCollection implements AbstractCellect {
               parseInt(lastBorderBottom),
           },
         };
+
+        this._debug('Rect is now: ', this._rect);
       }
     }
 
@@ -606,6 +727,7 @@ export class Cellect extends CellCollection implements AbstractCellect {
   }
 
   private onBlur(event: any): void {
+    this._debug('Element blurred.');
     if (this._options.clearOnBlur) {
       this.blur();
       this.unselect();
@@ -614,6 +736,8 @@ export class Cellect extends CellCollection implements AbstractCellect {
   }
 
   private onLassoStart(event: DragEvent) {
+    this._debug('Begin lasso.');
+
     event.preventDefault();
 
     if (this._isLocked) return;
@@ -644,6 +768,8 @@ export class Cellect extends CellCollection implements AbstractCellect {
   }
 
   private onLassoEnd(event: PointerEvent) {
+    this._debug('End lasso.');
+
     this._element.removeEventListener('pointermove', this.onLasso as any);
     window.removeEventListener('pointerup', this.onLassoEnd as any);
     CellectEventSender.sendSelect(this, event);
@@ -655,6 +781,7 @@ export class Cellect extends CellCollection implements AbstractCellect {
    * @todo Allow bigger cell size.
    */
   private _computeCellElements(): void {
+    this._debug('Compute cell elements.');
     // Get children elements with row and col selectors.
 
     const elements = this._cellsFromSelectors(
@@ -689,6 +816,8 @@ export class Cellect extends CellCollection implements AbstractCellect {
       }
       i++;
     }
+
+    this._debug('Cell elements computed: ', this.length);
   }
 
   /**
@@ -749,10 +878,25 @@ export class Cellect extends CellCollection implements AbstractCellect {
   }
 
   /**
+   * Run plugins hooks in order of registration.
+   *
+   * @param { string } hook The hook to run (eg. `beforeInit`).
+   */
+  private _callPlugins(hook: string, ...args: any[]): void {
+    for (const plugin of this._plugins) {
+      (plugin as any)[hook](this, ...args);
+    }
+  }
+
+  /**
    * The container element of the `TableSelect` cells.
    * When changing the element, the `TableSelect` instance will reset and recompute its cells.
    */
   public set element(element: HTMLElement) {
+    this._debug('Set container element.');
+
+    this._callPlugins('beforeElementChange', this._element);
+
     for (const cell of this) {
       cell.dispose();
     }
@@ -781,6 +925,8 @@ export class Cellect extends CellCollection implements AbstractCellect {
     }
 
     this._computeCellElements();
+
+    this._callPlugins('elementChanged', this._element);
   }
 
   /**
@@ -789,6 +935,7 @@ export class Cellect extends CellCollection implements AbstractCellect {
    */
   public set multiselection(allow: boolean) {
     if (this._element) {
+      this._debug('Set multiselection behavior: %s.', allow);
       // Make sure previous event listeners are removed.
 
       this._element.removeEventListener('keydown', this.onKeydown);
@@ -800,6 +947,10 @@ export class Cellect extends CellCollection implements AbstractCellect {
         this._element.addEventListener('keydown', this.onKeydown);
         this._element.addEventListener('keyup', this.onKeyup);
       }
+    } else {
+      this._debug(
+        'Trying to set multiselection behavior but element is undefined.'
+      );
     }
   }
 
