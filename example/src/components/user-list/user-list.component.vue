@@ -22,6 +22,7 @@ const tableSelect = useCellect(tableRef, {
   focusSelector: 'focused',
   resetOnChange: true,
   clearOnBlur: false, //true,
+  debug: true,
 });
 provide(CellectKey, tableSelect);
 

@@ -17,6 +17,8 @@ import {
 import type { Ref } from 'vue';
 import { numberToSpreadsheetColumn } from './spread-sheet.utils';
 import { useCellect, CellectKey } from '../../../../src/useCellect';
+import { Cellect } from '../../../../src/modules';
+import { DoNothingPlugin } from '../../plugins/do-nothing.plugin';
 import type { AbstractCell } from 'cell-collection';
 
 import type { UseStyle } from '../../use/useStyle';
@@ -29,6 +31,7 @@ import SpreadSheetItem from './spread-sheet-item.component.vue';
 const emit = defineEmits(['select']);
 
 const data: Ref<Array<Array<any>>> = ref([]);
+const containerRef: Ref<HTMLElement | undefined> = ref();
 const tableRef: Ref<HTMLElement | undefined> = ref();
 const lassoRef: Ref<HTMLElement | undefined> = ref();
 const lassoMoveRef: Ref<HTMLElement | undefined> = ref();
@@ -54,6 +57,18 @@ const tableSelect = useCellect(tableRef, {
   focusSelector: 'focused',
   resetOnChange: false,
   clearOnBlur: false,
+  debug: true,
+  plugins: [
+    [
+      DoNothingPlugin,
+      {
+        scrollElement: containerRef,
+        contentElement: tableRef,
+        DOMMode: true,
+        debug: true,
+      },
+    ],
+  ],
 });
 provide(CellectKey, tableSelect);
 
@@ -115,7 +130,7 @@ watch(
 );
 
 onMounted(() => {
-  for (let row = 0; row < 20; row++) {
+  for (let row = 0; row < 200; row++) {
     const cols = [];
     for (let col = 0; col < 20; col++) {
       cols[col] = undefined; // `${row} ${col}`;
@@ -236,6 +251,8 @@ const onClickCol = (event: PointerEvent, col: number) => {
     tableRef.value.focus();
   }
 };
+
+// TODO: debounce resize to avoid cellect computing selection rect during all the resizing.
 
 const onResizeRow = (event: DragEvent, index: number) => {
   // FIXME: happens after 'click' (that selects the row).
@@ -373,66 +390,66 @@ const onItemBlur = (row: number, col: number, value: any) => {
                   draggable="true",
                   @drag="onResizeCol($event, index - 1)"
                 )
-
-        .spreadsheet-table(
-            ref="tableRef",
-            @keydown.enter="onEnter"
-        )
-            .lasso(
-              ref="lassoRef",
-              style="display: none"
+        .spreadsheet-content(style="width: fit-content; height: fit-content; overflow: scroll", ref="containerRef")
+            .spreadsheet-table(
+                ref="tableRef",
+                @keydown.enter="onEnter"
             )
-              .lasso-move-handle.top(
-                draggable="true",
-                @dragstart="onMoveStart",
-              )
-              .lasso-move-handle.left(
-                draggable="true",
-                @dragstart="onMoveStart",
-              )
-              .lasso-move-handle.right(
-                draggable="true",
-                @dragstart="onMoveStart",
-              )
-              .lasso-move-handle.bottom(
-                draggable="true",
-                @dragstart="onMoveStart",
-              )
-
-              .lasso-extend-handle
-
-            .lasso-move(
-              ref="lassoMoveRef",
-              style="display: none"
-            )
-            
-            // selectionBounds
-
-            .row(
-                v-for="(row, rowIndex) in data",
-                :key="rowIndex",
-                :id="`row-${rowIndex}`",
-                :class="`row-${rowIndex}`"
-            )
-                .col(
-                    v-for="(col, colIndex) in row",
-                    :key="`${rowIndex}-${colIndex}`",
-                    :id="`col-${rowIndex}-${colIndex}`",
-                    :class="`col-${colIndex}`",
-
-                    tabindex="-1",
-
-                    @dblclick="onDoubleClick($event, rowIndex, colIndex)",
+                .lasso(
+                  ref="lassoRef",
+                  style="display: none"
                 )
-                    spread-sheet-item(
-                      :row="rowIndex",
-                      :col="colIndex",
-                      :value="col",
-                      :editing="edited.row === rowIndex && edited.col === colIndex",
+                  .lasso-move-handle.top(
+                    draggable="true",
+                    @dragstart="onMoveStart",
+                  )
+                  .lasso-move-handle.left(
+                    draggable="true",
+                    @dragstart="onMoveStart",
+                  )
+                  .lasso-move-handle.right(
+                    draggable="true",
+                    @dragstart="onMoveStart",
+                  )
+                  .lasso-move-handle.bottom(
+                    draggable="true",
+                    @dragstart="onMoveStart",
+                  )
 
-                      @input="onItemChange",
-                      @blur="onItemBlur",
+                  .lasso-extend-handle
+
+                .lasso-move(
+                  ref="lassoMoveRef",
+                  style="display: none"
+                )
+                
+                // selectionBounds
+
+                .row(
+                    v-for="(row, rowIndex) in data",
+                    :key="rowIndex",
+                    :id="`row-${rowIndex}`",
+                    :class="`row-${rowIndex}`"
+                )
+                    .col(
+                        v-for="(col, colIndex) in row",
+                        :key="`${rowIndex}-${colIndex}`",
+                        :id="`col-${rowIndex}-${colIndex}`",
+                        :class="`col-${colIndex}`",
+
+                        tabindex="-1",
+
+                        @dblclick="onDoubleClick($event, rowIndex, colIndex)",
                     )
+                        spread-sheet-item(
+                          :row="rowIndex",
+                          :col="colIndex",
+                          :value="col",
+                          :editing="edited.row === rowIndex && edited.col === colIndex",
+
+                          @input="onItemChange",
+                          @blur="onItemBlur",
+                        )
                     
 </template>
 <style lang="sass">
