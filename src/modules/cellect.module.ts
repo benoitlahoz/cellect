@@ -834,6 +834,24 @@ export class Cellect extends CellCollection implements AbstractCellect {
         this.unselect();
         this.select(cell);
         this.focus(cell);
+
+        if (cell) {
+          const element = cell.element;
+          if (element) {
+            const rect = element.getBoundingClientRect();
+
+            // Only completely visible elements return true
+            const isInViewport =
+              rect.top >= this._element.offsetTop &&
+              rect.bottom <= this._element.offsetHeight;
+
+            if (!isInViewport) {
+              element.scrollIntoView({
+                block: 'nearest',
+              });
+            }
+          }
+        }
       } else {
         // Reset all selected cells.
         this.unselect();
