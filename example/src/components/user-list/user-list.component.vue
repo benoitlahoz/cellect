@@ -23,6 +23,7 @@ const tableSelect = useCellect(tableRef, {
   resetOnChange: true,
   clearOnBlur: false, //true,
   debug: true,
+  multiselection: false,
 });
 provide(CellectKey, tableSelect);
 
@@ -100,7 +101,7 @@ onMounted(async () => {
 const getDataAtPosition = (row: number, col: number) => {
   if (row >= remoteUsers.value.length) {
     const newRow = row - remoteUsers.value.length;
-    console.log(suggestedUsers.value[newRow]);
+    // console.log(suggestedUsers.value[newRow]);
     return suggestedUsers.value[newRow][col];
   }
   return remoteUsers.value[row][col];
