@@ -972,14 +972,14 @@ export class Cellect extends CellCollection implements AbstractCellect {
   public set multiselection(allow: boolean) {
     if (this._element) {
       this._debug('Set multiselection behavior: %s.', allow);
+      this._options.multiselection = allow;
+
       // Make sure previous event listeners are removed.
 
       this._element.removeEventListener('keydown', this.onKeydown);
       this._element.removeEventListener('keyup', this.onKeyup);
 
-      this._options.multiselection = allow;
-
-      if (this._options.multiselection) {
+      if (this._options.useKeyboard) {
         this._element.addEventListener('keydown', this.onKeydown);
         this._element.addEventListener('keyup', this.onKeyup);
       }
